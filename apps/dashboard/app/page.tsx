@@ -1,5 +1,12 @@
 import { redirect } from "next/navigation";
+import { getAuthenticatedUser } from "@/lib/auth-session";
 
 export default function HomePage(): never {
-  redirect("/dashboard");
+  const user = getAuthenticatedUser();
+
+  if (user) {
+    redirect("/connect-whatsapp");
+  }
+
+  redirect("/register");
 }

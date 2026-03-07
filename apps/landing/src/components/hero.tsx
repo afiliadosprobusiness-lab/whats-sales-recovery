@@ -1,4 +1,8 @@
+import Link from "next/link";
 import { MessageCircle, Play } from "lucide-react";
+
+const dashboardEntryUrl =
+  process.env.NEXT_PUBLIC_DASHBOARD_URL ?? "http://localhost:3001";
 
 export function HeroSection(): JSX.Element {
   return (
@@ -28,10 +32,10 @@ export function HeroSection(): JSX.Element {
             </p>
 
             <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:gap-4">
-              <button className="ui-btn-primary w-full sm:w-auto">
+              <Link href={dashboardEntryUrl} className="ui-btn-primary w-full sm:w-auto">
                 <MessageCircle className="h-5 w-5" />
-                Conectar mi WhatsApp
-              </button>
+                Connect my WhatsApp
+              </Link>
               <button className="ui-btn-secondary w-full sm:w-auto">
                 <Play className="h-5 w-5" />
                 Ver demo

@@ -1,4 +1,8 @@
+import Link from "next/link";
 import { ArrowRight, HeadphonesIcon, MessageCircle, Shield, Zap } from "lucide-react";
+
+const dashboardEntryUrl =
+  process.env.NEXT_PUBLIC_DASHBOARD_URL ?? "http://localhost:3001";
 
 const trustBadges = [
   {
@@ -46,11 +50,14 @@ export function CTASection(): JSX.Element {
                 Miles de negocios ya estan recuperando clientes perdidos. No dejes que tus ventas se escapen.
               </p>
 
-              <button className="ui-btn-primary mb-8 px-10 py-6 text-xl font-bold md:text-2xl">
+              <Link
+                href={dashboardEntryUrl}
+                className="ui-btn-primary mb-8 px-10 py-6 text-xl font-bold md:text-2xl"
+              >
                 <MessageCircle className="h-6 w-6" />
-                Conectar mi WhatsApp
+                Connect my WhatsApp
                 <ArrowRight className="h-6 w-6 transition-transform group-hover:translate-x-1" />
-              </button>
+              </Link>
 
               <p className="mb-12 text-sm text-foreground/60">
                 Configuracion en 2 minutos • Sin tarjeta de credito • Cancela cuando quieras

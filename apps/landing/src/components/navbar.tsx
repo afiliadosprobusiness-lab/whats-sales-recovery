@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { MessageCircle } from "lucide-react";
 
+const dashboardEntryUrl =
+  process.env.NEXT_PUBLIC_DASHBOARD_URL ?? "http://localhost:3001";
+
 export function Navbar(): JSX.Element {
   return (
     <header className="fixed inset-x-0 top-0 z-50 px-4 py-3 sm:px-6 sm:py-4">
@@ -28,11 +31,16 @@ export function Navbar(): JSX.Element {
           </nav>
 
           <div className="flex items-center gap-2 sm:gap-4">
-            <button className="hidden text-sm text-foreground/70 ui-link-hover sm:block">Iniciar sesion</button>
-            <button className="rounded-xl bg-gradient-to-r from-purple-600 via-indigo-500 to-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-[0_10px_28px_rgba(79,70,229,0.42)] transition-all duration-300 hover:scale-[1.03] hover:from-purple-500 hover:to-blue-500 hover:shadow-[0_16px_36px_rgba(79,70,229,0.52)] sm:px-6 sm:py-2.5 sm:text-sm">
+            <Link href={dashboardEntryUrl} className="hidden text-sm text-foreground/70 ui-link-hover sm:block">
+              Iniciar sesion
+            </Link>
+            <Link
+              href={dashboardEntryUrl}
+              className="rounded-xl bg-gradient-to-r from-purple-600 via-indigo-500 to-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-[0_10px_28px_rgba(79,70,229,0.42)] transition-all duration-300 hover:scale-[1.03] hover:from-purple-500 hover:to-blue-500 hover:shadow-[0_16px_36px_rgba(79,70,229,0.52)] sm:px-6 sm:py-2.5 sm:text-sm"
+            >
               <span className="sm:hidden">Comenzar</span>
               <span className="hidden sm:inline">Comenzar gratis</span>
-            </button>
+            </Link>
           </div>
         </div>
       </div>

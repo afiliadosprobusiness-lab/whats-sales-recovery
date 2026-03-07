@@ -2,26 +2,33 @@ type StatusPillProps = {
   value: string;
 };
 
-export function StatusPill({ value }: StatusPillProps): JSX.Element {
-  const tone = getTone(value);
-
-  return <span className={`status-pill status-pill--${tone}`}>{value}</span>;
-}
-
-function getTone(value: string): "neutral" | "success" | "warning" | "error" {
+function getToneClass(value: string): string {
   const normalized = value.toLowerCase();
 
-  if (normalized === "recovered" || normalized === "replied" || normalized === "yes") {
-    return "success";
+  if (["recovered", "replied", "yes", "connected"].includes(normalized)) {
+    return "border-emerald-400/35 bg-emerald-500/10 text-emerald-200";
   }
 
-  if (normalized === "idle" || normalized === "scheduled") {
-    return "warning";
+  if (["idle", "scheduled", "pending_qr"].includes(normalized)) {
+    return "border-amber-400/35 bg-amber-500/10 text-amber-100";
   }
 
-  if (normalized === "failed") {
-    return "error";
+  if (["failed", "error", "no"].includes(normalized)) {
+    return "border-rose-400/35 bg-rose-500/10 text-rose-100";
   }
 
-  return "neutral";
+  return "border-white/15 bg-white/[0.05] text-slate-100";
+}
+
+export function StatusPill({ value }: StatusPillProps): JSX.Element {
+  return (
+    <span
+      className={[
+        "inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide",
+        getToneClass(value)
+      ].join(" ")}
+    >
+      {value}
+    </span>
+  );
 }

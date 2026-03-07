@@ -6,10 +6,15 @@ Validate product value quickly by connecting WhatsApp, ingesting messages, detec
 ## Quick system description
 Backend modular monolith (Node.js + TypeScript) using Baileys (`@whiskeysockets/baileys`) sessions plus two Next.js frontends:
 - `apps/landing` for public marketing
-- `apps/dashboard` for onboarding and operational tracking
+- `apps/dashboard` for authenticated SaaS onboarding and operational tracking
 - `apps/landing` uses TailwindCSS with reusable SaaS landing sections.
+- `apps/dashboard` uses App Router + TailwindCSS with JWT cookie authentication.
 
 ## Current focus (Sprint 4)
+- SaaS auth bootstrap: `/register` + `/login` with bcrypt password hashing and JWT session cookie.
+- Dashboard root (`/`) redirect logic:
+  - guest -> `/register`
+  - authenticated user -> `/connect-whatsapp`
 - MVP onboarding: workspace creation + WhatsApp connection via QR in dashboard.
 - Dashboard connect screen uses `qrcode.react` to render scannable WhatsApp QR images.
 - WhatsApp session connection and restore with workspace-level in-memory socket reuse.
@@ -39,6 +44,12 @@ Backend modular monolith (Node.js + TypeScript) using Baileys (`@whiskeysockets/
 
 ## Architecture summary
 - API + session runtime in one service.
+- Dashboard app includes local auth route handlers:
+  - `POST /api/auth/register`
+  - `POST /api/auth/login`
+  - `POST /api/auth/logout`
+- Dashboard auth uses signed JWT in `httpOnly` cookie (`rv_auth_token`).
+- Dashboard user credentials are persisted for MVP in `apps/dashboard/.data/users.json` with bcrypt hashes.
 - PostgreSQL for domain data.
 - BullMQ/Redis scaffolded for later async jobs.
 - In-process event bus for module communication.
@@ -113,10 +124,11 @@ Backend modular monolith (Node.js + TypeScript) using Baileys (`@whiskeysockets/
 - Keep WhatsApp-only integration.
 - Keep implementation simple and modular.
 - Keep AI usage limited to sales-assistant reply generation for conversion-oriented chats.
-- Keep onboarding unauthenticated and single-workspace-oriented for MVP.
+- Keep onboarding single-workspace-oriented for MVP.
 
 ## Frontend routes
-- `/` (landing marketing page)
+- Landing (`apps/landing`)
+  - `/` (marketing page)
   - `Navbar`
   - `HeroSection`
   - `ProblemSection`
@@ -126,7 +138,15 @@ Backend modular monolith (Node.js + TypeScript) using Baileys (`@whiskeysockets/
   - `HowItWorks`
   - `CTASection`
   - `Footer`
-- `/connect-whatsapp`
-- `/dashboard`
-- `/conversations`
-- `/conversations/:id`
+- Dashboard (`apps/dashboard`)
+  - `/`
+    - Auth-aware entrypoint (guest -> `/register`, authenticated -> `/connect-whatsapp`)
+  - `/register`
+  - `/login`
+  - `/dashboard`
+  - `/connect-whatsapp`
+  - `/conversations`
+  - `/conversations/:id`
+  - `/recovery`
+  - `/analytics`
+  - `/settings`

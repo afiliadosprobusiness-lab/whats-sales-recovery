@@ -41,18 +41,14 @@ export function ConnectWhatsappClient(): JSX.Element {
 
     void getWhatsappSessionStatusByWorkspace({ workspaceId })
       .then((response) => {
-        if (isCancelled) {
-          return;
+        if (!isCancelled) {
+          setConnected(response.connected);
         }
-
-        setConnected(response.connected);
       })
       .catch(() => {
-        if (isCancelled) {
-          return;
+        if (!isCancelled) {
+          setConnected(false);
         }
-
-        setConnected(false);
       });
 
     return () => {
@@ -81,12 +77,10 @@ export function ConnectWhatsappClient(): JSX.Element {
           }
         })
         .catch(() => {
-          if (isCancelled) {
-            return;
+          if (!isCancelled) {
+            setError("Could not refresh session status.");
+            setIsPolling(false);
           }
-
-          setError("Could not refresh session status.");
-          setIsPolling(false);
         });
     }, POLL_INTERVAL_MS);
 
@@ -142,19 +136,20 @@ export function ConnectWhatsappClient(): JSX.Element {
   const showBusinessNameInput = !workspaceId;
 
   return (
-    <section className="page">
-      <header className="page-header">
-        <h1 className="page-title">Connect WhatsApp</h1>
-        <p className="muted">
-          Create your workspace and scan the QR code to connect your WhatsApp.
+    <section className="space-y-6">
+      <header className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
+        <h2 className="text-3xl font-semibold text-white">Connect WhatsApp</h2>
+        <p className="mt-2 text-sm text-slate-300">
+          Start your business session, scan the QR code, and activate real-time
+          conversation recovery.
         </p>
       </header>
 
-      <article className="panel connect-flow">
-        <form className="sale-form" onSubmit={onSubmit}>
+      <article className="grid gap-6 rounded-2xl border border-white/10 bg-slate-900/50 p-6 lg:grid-cols-[1fr_1fr]">
+        <form className="space-y-4" onSubmit={onSubmit}>
           {showBusinessNameInput ? (
-            <label className="field">
-              <span>Business name</span>
+            <label className="block space-y-2">
+              <span className="text-sm text-slate-300">Business name</span>
               <input
                 type="text"
                 value={businessName}
@@ -162,41 +157,61 @@ export function ConnectWhatsappClient(): JSX.Element {
                 placeholder="Business Name"
                 maxLength={120}
                 required
+                className="w-full rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/70"
               />
             </label>
           ) : (
-            <p className="muted">Workspace ID: {workspaceId}</p>
+            <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 text-sm text-slate-300">
+              Workspace ID
+              <p className="mt-1 break-all text-cyan-200">{workspaceId}</p>
+            </div>
           )}
 
-          <button type="submit" className="button" disabled={isSubmitting}>
+          <button
+            type="submit"
+            className="rounded-xl bg-gradient-to-r from-cyan-400 to-blue-500 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:brightness-110 disabled:opacity-60"
+            disabled={isSubmitting}
+          >
             {isSubmitting ? "Connecting..." : "Connect WhatsApp"}
           </button>
 
-          {error ? <p className="error-text">{error}</p> : null}
+          {error ? (
+            <p className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+              {error}
+            </p>
+          ) : null}
+
+          {connected ? (
+            <p className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">
+              WhatsApp connected successfully
+            </p>
+          ) : null}
         </form>
 
-        {connected ? (
-          <p className="success-text">WhatsApp session connected.</p>
-        ) : null}
-
-        {!connected && qr ? (
-          <div className="qr-wrap">
-            <p className="muted">Scan this QR with WhatsApp on your phone.</p>
-            <div className="qr-box" aria-label="WhatsApp QR code">
-              <QRCodeSVG
-                key={qr}
-                value={qr}
-                size={256}
-                includeMargin
-                level="M"
-              />
+        <div className="rounded-2xl border border-dashed border-white/15 bg-slate-950/50 p-5">
+          {!connected && qr ? (
+            <div className="space-y-4">
+              <p className="text-sm text-slate-300">
+                Scan this QR with your WhatsApp mobile app.
+              </p>
+              <div className="inline-flex rounded-xl border border-white/10 bg-white p-2">
+                <QRCodeSVG key={qr} value={qr} size={240} includeMargin level="M" />
+              </div>
             </div>
-          </div>
-        ) : null}
+          ) : null}
 
-        {!connected && !qr && isPolling ? (
-          <p className="muted">Waiting for QR code. Please keep this page open.</p>
-        ) : null}
+          {!connected && !qr && isPolling ? (
+            <p className="text-sm text-slate-300">
+              Waiting for QR code. Keep this page open.
+            </p>
+          ) : null}
+
+          {connected ? (
+            <p className="text-sm text-emerald-200">
+              Session is active. You can now operate the recovery flow.
+            </p>
+          ) : null}
+        </div>
       </article>
     </section>
   );

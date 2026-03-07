@@ -115,6 +115,17 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
 
 ## 5) Main flows
 
+### Flow Auth: SaaS authentication and session bootstrap
+1. User opens dashboard entry route `/`.
+2. If auth cookie (`rv_auth_token`) is missing or invalid, system redirects to `/register`.
+3. Register flow (`/register`) stores user with bcrypt-hashed password and returns JWT.
+4. Login flow (`/login`) validates bcrypt password hash and returns JWT.
+5. JWT is persisted in an `httpOnly` cookie for protected dashboard routes.
+6. Authenticated users can access `/dashboard`, `/connect-whatsapp`, `/conversations`, `/recovery`, `/analytics`, and `/settings`.
+7. Landing CTA (`Connect my WhatsApp`) routes to dashboard entry so redirect logic decides:
+   - guest -> `/register`
+   - authenticated user -> `/connect-whatsapp`
+
 ### Flow A: WhatsApp session connection
 1. User creates workspace via onboarding endpoint.
 2. User requests `startSession(workspaceId)`.
@@ -346,6 +357,9 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
   - `apps/dashboard` for operational management
   - `apps/landing` for public marketing and onboarding entrypoint
   - `apps/landing` uses TailwindCSS and reusable section components based on the public SaaS landing design system.
+  - `apps/dashboard` uses App Router + TailwindCSS for authenticated SaaS operations.
+  - Dashboard authentication is handled by Next.js route handlers (`/api/auth/register`, `/api/auth/login`, `/api/auth/logout`) with JWT + `httpOnly` cookie session.
+  - User credentials are stored in local JSON persistence for MVP (`apps/dashboard/.data/users.json`) with bcrypt hashing.
   - Dashboard onboarding UI renders WhatsApp QR as SVG using `qrcode.react` for scanner compatibility.
 - In-process WhatsApp session sockets (`@whiskeysockets/baileys`).
   - Session auth state is persisted under `sessions/{workspace_id}` using `useMultiFileAuthState`.
@@ -487,14 +501,29 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
       - `HowItWorks`
       - `CTASection`
       - `Footer`
-- `/connect-whatsapp`
-  - Onboarding flow: create workspace, start WhatsApp session, render scannable QR SVG, poll connected status.
-- `/dashboard`
-  - Metrics: total conversations, idle, recovery sent, recovered sales, recovered revenue.
-- `/conversations`
-  - Table: contact phone, last message, recovery status, recovered flag, recovered amount.
-- `/conversations/:id`
-  - Message timeline, latest recovery status, action `Mark sale recovered`.
+- Dashboard app (`apps/dashboard`):
+  - `/`
+    - Auth-aware entrypoint:
+      - guest -> `/register`
+      - authenticated -> `/connect-whatsapp`
+  - `/register`
+    - Name/email/password registration with bcrypt hash + JWT cookie issuance.
+  - `/login`
+    - Email/password login with hash validation + JWT cookie issuance.
+  - `/dashboard`
+    - SaaS metrics cards (placeholder integrations).
+  - `/connect-whatsapp`
+    - Workspace creation + WhatsApp QR connection flow.
+  - `/conversations`
+    - CRM layout with conversation list, chat window, and customer info panel.
+  - `/recovery`
+    - Abandoned/reactivatable/ready-to-close lead queues.
+  - `/analytics`
+    - Recovered revenue, follow-up performance, and conversion chart placeholders.
+  - `/settings`
+    - SaaS settings scaffold route.
+  - `/conversations/:id`
+    - Message timeline, latest recovery status, action `Mark sale recovered`.
 
 ## 10) Environment variables
 - `NODE_ENV`
@@ -512,6 +541,9 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
 - Frontend (`apps/dashboard`):
   - `NEXT_PUBLIC_API_BASE_URL`
   - `NEXT_PUBLIC_WORKSPACE_ID` (optional for onboarding; if missing, created from UI flow)
+  - `JWT_SECRET` (server-side JWT signing secret for dashboard auth)
+- Frontend (`apps/landing`):
+  - `NEXT_PUBLIC_DASHBOARD_URL` (optional; defaults to `http://localhost:3001` for CTA routing)
 
 ## 11) Non-functional requirements
 - Tenant isolation by `workspace_id`.

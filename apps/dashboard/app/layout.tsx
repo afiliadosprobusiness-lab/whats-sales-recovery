@@ -1,11 +1,17 @@
-import Link from "next/link";
-import { Manrope } from "next/font/google";
+import { DM_Sans, Space_Grotesk } from "next/font/google";
 import type { ReactNode } from "react";
+import { AppShell } from "@/components/app-shell";
+import { getAuthenticatedUser } from "@/lib/auth-session";
 import "./globals.css";
 
-const manrope = Manrope({
+const bodyFont = DM_Sans({
   subsets: ["latin"],
-  variable: "--font-manrope"
+  variable: "--font-body"
+});
+
+const displayFont = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-display"
 });
 
 type RootLayoutProps = {
@@ -13,25 +19,19 @@ type RootLayoutProps = {
 };
 
 export const metadata = {
-  title: "RecuperaVentas Dashboard",
-  description: "Recovered sales and conversation tracking"
+  title: "RecuperaVentas",
+  description: "Recover revenue from WhatsApp conversations"
 };
 
 export default function RootLayout({ children }: RootLayoutProps): JSX.Element {
+  const user = getAuthenticatedUser();
+
   return (
     <html lang="en">
-      <body className={manrope.variable}>
-        <div className="app-shell">
-          <aside className="sidebar">
-            <p className="sidebar__brand">RecuperaVentas</p>
-            <nav className="sidebar__nav">
-              <Link href="/connect-whatsapp">Connect WhatsApp</Link>
-              <Link href="/dashboard">Dashboard</Link>
-              <Link href="/conversations">Conversations</Link>
-            </nav>
-          </aside>
-          <main className="content">{children}</main>
-        </div>
+      <body
+        className={`${bodyFont.variable} ${displayFont.variable} min-h-screen bg-slate-925 text-slate-100 antialiased`}
+      >
+        <AppShell user={user}>{children}</AppShell>
       </body>
     </html>
   );

@@ -1,18 +1,15 @@
 type MetricCardProps = {
   label: string;
   value: string;
-  tone?: "default" | "highlight";
+  delta: string;
 };
 
-export function MetricCard({
-  label,
-  value,
-  tone = "default"
-}: MetricCardProps): JSX.Element {
+export function MetricCard({ label, value, delta }: MetricCardProps): JSX.Element {
   return (
-    <article className={`metric-card metric-card--${tone}`}>
-      <p className="metric-card__label">{label}</p>
-      <p className="metric-card__value">{value}</p>
+    <article className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-glow">
+      <p className="text-sm text-slate-300">{label}</p>
+      <p className="mt-2 text-3xl font-semibold text-white">{value}</p>
+      <p className="mt-3 text-xs text-cyan-300">{delta}</p>
     </article>
   );
 }
