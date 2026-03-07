@@ -395,7 +395,7 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
   - `apps/landing` uses TailwindCSS and reusable section components based on the public SaaS landing design system.
   - `apps/dashboard` uses App Router + TailwindCSS for authenticated SaaS operations.
   - Dashboard authentication is handled by Next.js route handlers (`/api/auth/register`, `/api/auth/login`, `/api/auth/logout`) with JWT + `httpOnly` cookie session.
-  - User credentials are stored in local JSON persistence for MVP (`apps/dashboard/.data/users.json`) with bcrypt hashing.
+  - User credentials are stored in JSON persistence for MVP (`apps/dashboard/.data/users.json` in local dev, `/tmp/recuperaventas-dashboard/users.json` in production serverless by default) with bcrypt hashing.
   - Dashboard onboarding UI renders WhatsApp QR as SVG using `qrcode.react` for scanner compatibility.
 - In-process WhatsApp session sockets (`@whiskeysockets/baileys`).
   - Session auth state is persisted under `sessions/{workspace_id}` using `useMultiFileAuthState`.
@@ -606,6 +606,7 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
   - `NEXT_PUBLIC_API_BASE_URL`
   - `NEXT_PUBLIC_WORKSPACE_ID` (optional for onboarding; if missing, created from UI flow)
   - `JWT_SECRET` (server-side JWT signing secret for dashboard auth)
+  - `AUTH_USERS_FILE_PATH` (optional custom auth users JSON path)
 - Frontend (`apps/landing`):
   - `NEXT_PUBLIC_DASHBOARD_URL` (optional; defaults to `http://localhost:3001` for CTA routing)
 

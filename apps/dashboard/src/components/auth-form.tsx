@@ -19,6 +19,16 @@ type AuthResponse = {
   };
 };
 
+function getDefaultErrorMessage(mode: AuthMode, status: number): string {
+  if (status === 503) {
+    return mode === "register"
+      ? "Registration is temporarily unavailable. Please try again in a moment."
+      : "Login is temporarily unavailable. Please try again in a moment.";
+  }
+
+  return mode === "register" ? "Could not create account" : "Could not sign in";
+}
+
 export function AuthForm({ mode }: AuthFormProps): JSX.Element {
   const router = useRouter();
   const isRegisterMode = mode === "register";
@@ -53,16 +63,21 @@ export function AuthForm({ mode }: AuthFormProps): JSX.Element {
         body: JSON.stringify(payload)
       });
 
-      const body = (await response.json()) as
+      const rawBody = await response.text();
+      let body:
         | AuthResponse
-        | { error?: string; message?: string };
+        | { error?: string; message?: string }
+        | null = null;
+      try {
+        body = JSON.parse(rawBody) as AuthResponse | { error?: string; message?: string };
+      } catch {
+        body = null;
+      }
 
-      if (!response.ok || !("token" in body)) {
-        const errorBody = body as { error?: string; message?: string };
-        const fallbackMessage = isRegisterMode
-          ? "Could not create account"
-          : "Could not sign in";
-        setErrorMessage(errorBody.error ?? errorBody.message ?? fallbackMessage);
+      if (!response.ok || !body || !("token" in body)) {
+        const errorBody = body as { error?: string; message?: string } | null;
+        const fallbackMessage = getDefaultErrorMessage(mode, response.status);
+        setErrorMessage(errorBody?.error ?? errorBody?.message ?? fallbackMessage);
         return;
       }
 
