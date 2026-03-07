@@ -28,6 +28,7 @@ Backend modular monolith (Node.js + TypeScript) using Baileys (`@whiskeysockets/
 - Campaign reply tracking and campaign metrics.
 - Sales-assistant auto-replies focused on lead qualification and closing.
 - Workspace chatbot settings (`chatbot_enabled`, style, product context).
+- Workspace AI chatbot router webhook setting (`ai_router_webhook_url`).
 - Human takeover stop condition and 2-4s assistant pacing.
 - Sales assistant dashboard counters.
 - Reply detection for sent recovery attempts.
@@ -43,6 +44,7 @@ Backend modular monolith (Node.js + TypeScript) using Baileys (`@whiskeysockets/
 - Auto revenue reports with daily/weekly/monthly business performance summaries.
 - Workspace automation settings for configurable n8n webhook endpoints.
 - Async n8n webhook triggers on inbound lead interactions (quick/follow-up/final recovery).
+- Async AI chatbot webhook forwarding on inbound WhatsApp messages.
 - Playbook-based automation controls in dashboard (`sales_recovery` enable/disable).
 
 ## Architecture summary
@@ -78,7 +80,9 @@ Backend modular monolith (Node.js + TypeScript) using Baileys (`@whiskeysockets/
 - Sales assistant consumes `playbook_high_performance` and prioritizes high-performing playbooks.
 - Revenue reports worker computes period revenue metrics every 24 hours and emits report + insight events.
 - Settings API exposes workspace-level n8n webhook configuration through `/settings/automations`.
+- Settings API exposes AI chatbot webhook configuration through `/settings/ai-chatbot` (alias: `/api/settings/ai-chatbot`).
 - n8n webhook dispatch is async/non-blocking and logs failures without breaking ingestion flow.
+- AI chatbot webhook dispatch is async/non-blocking and logs failures without breaking ingestion flow.
 - Automation playbook API controls webhook execution through `/automations/playbooks`.
 
 ## Main entities (active now)
@@ -160,4 +164,4 @@ Backend modular monolith (Node.js + TypeScript) using Baileys (`@whiskeysockets/
     - Enable/disable automation playbooks and monitor running automations.
   - `/analytics`
   - `/settings`
-    - Advanced settings only (webhook URLs hidden from normal users).
+    - Workspace settings including AI chatbot webhook URL.

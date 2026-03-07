@@ -84,6 +84,10 @@ export type AutomationSettings = {
   finalRecoveryWebhook: string;
 };
 
+export type AiChatbotSettings = {
+  aiRouterWebhookUrl: string;
+};
+
 export type AutomationPlaybookName = "sales_recovery";
 
 export type AutomationPlaybook = {
@@ -104,6 +108,11 @@ type AutomationPlaybooksApiData = {
     enabled: boolean;
   }>;
   running: AutomationPlaybookName[];
+};
+
+type AiChatbotSettingsApiData = {
+  workspace_id: string;
+  ai_router_webhook_url: string | null;
 };
 
 function isConfigured(): boolean {
@@ -152,6 +161,14 @@ function mapAutomationSettings(
 function normalizeWebhookInput(value: string): string | null {
   const normalized = value.trim();
   return normalized ? normalized : null;
+}
+
+function mapAiChatbotSettings(
+  data: AiChatbotSettingsApiData
+): AiChatbotSettings {
+  return {
+    aiRouterWebhookUrl: data.ai_router_webhook_url ?? ""
+  };
 }
 
 export async function getConversations(): Promise<ConversationItem[]> {
@@ -281,6 +298,41 @@ export async function saveAutomationSettings(input: {
   );
 
   return mapAutomationSettings(data);
+}
+
+export async function getAiChatbotSettings(input: {
+  workspaceId: string;
+}): Promise<AiChatbotSettings> {
+  const query = new URLSearchParams({
+    workspaceId: input.workspaceId
+  });
+
+  const data = await fetchApi<AiChatbotSettingsApiData>(
+    `/settings/ai-chatbot?${query.toString()}`
+  );
+
+  return mapAiChatbotSettings(data);
+}
+
+export async function saveAiChatbotSettings(input: {
+  workspaceId: string;
+  aiRouterWebhookUrl: string;
+}): Promise<AiChatbotSettings> {
+  const query = new URLSearchParams({
+    workspaceId: input.workspaceId
+  });
+
+  const data = await fetchApi<AiChatbotSettingsApiData>(
+    `/settings/ai-chatbot?${query.toString()}`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        ai_router_webhook_url: input.aiRouterWebhookUrl.trim()
+      })
+    }
+  );
+
+  return mapAiChatbotSettings(data);
 }
 
 export async function getAutomationPlaybooks(input: {

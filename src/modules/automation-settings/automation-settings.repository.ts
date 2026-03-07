@@ -26,7 +26,8 @@ export class AutomationSettingsRepository {
         workspace_id AS "workspaceId",
         quick_recovery_webhook AS "quickRecoveryWebhook",
         followup_recovery_webhook AS "followupRecoveryWebhook",
-        final_recovery_webhook AS "finalRecoveryWebhook"
+        final_recovery_webhook AS "finalRecoveryWebhook",
+        ai_router_webhook_url AS "aiRouterWebhookUrl"
       FROM automation_settings
       WHERE workspace_id = $1
       LIMIT 1
@@ -39,7 +40,8 @@ export class AutomationSettingsRepository {
         workspaceId,
         quickRecoveryWebhook: null,
         followupRecoveryWebhook: null,
-        finalRecoveryWebhook: null
+        finalRecoveryWebhook: null,
+        aiRouterWebhookUrl: null
       }
     );
   }
@@ -71,7 +73,8 @@ export class AutomationSettingsRepository {
           workspace_id AS "workspaceId",
           quick_recovery_webhook AS "quickRecoveryWebhook",
           followup_recovery_webhook AS "followupRecoveryWebhook",
-          final_recovery_webhook AS "finalRecoveryWebhook"
+          final_recovery_webhook AS "finalRecoveryWebhook",
+          ai_router_webhook_url AS "aiRouterWebhookUrl"
       )
       SELECT * FROM upsert
       `,
@@ -88,7 +91,51 @@ export class AutomationSettingsRepository {
         workspaceId: input.workspaceId,
         quickRecoveryWebhook: null,
         followupRecoveryWebhook: null,
-        finalRecoveryWebhook: null
+        finalRecoveryWebhook: null,
+        aiRouterWebhookUrl: null
+      }
+    );
+  }
+
+  async upsertWorkspaceAiChatbotSettings(input: {
+    workspaceId: string;
+    aiRouterWebhookUrl: string;
+  }): Promise<WorkspaceAutomationSettings> {
+    const result = await dbPool.query<WorkspaceAutomationSettings>(
+      `
+      WITH upsert AS (
+        INSERT INTO automation_settings (
+          workspace_id,
+          quick_recovery_webhook,
+          followup_recovery_webhook,
+          final_recovery_webhook,
+          ai_router_webhook_url
+        )
+        SELECT $1::uuid, NULL, NULL, NULL, $2
+        WHERE EXISTS (SELECT 1 FROM workspaces WHERE id = $1::uuid)
+        ON CONFLICT (workspace_id)
+        DO UPDATE SET
+          ai_router_webhook_url = EXCLUDED.ai_router_webhook_url,
+          updated_at = NOW()
+        RETURNING
+          workspace_id AS "workspaceId",
+          quick_recovery_webhook AS "quickRecoveryWebhook",
+          followup_recovery_webhook AS "followupRecoveryWebhook",
+          final_recovery_webhook AS "finalRecoveryWebhook",
+          ai_router_webhook_url AS "aiRouterWebhookUrl"
+      )
+      SELECT * FROM upsert
+      `,
+      [input.workspaceId, input.aiRouterWebhookUrl]
+    );
+
+    return (
+      result.rows[0] ?? {
+        workspaceId: input.workspaceId,
+        quickRecoveryWebhook: null,
+        followupRecoveryWebhook: null,
+        finalRecoveryWebhook: null,
+        aiRouterWebhookUrl: null
       }
     );
   }

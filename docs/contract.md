@@ -577,7 +577,49 @@ Response `200`:
 }
 ```
 
-## 3.13 Automation playbooks
+## 3.13 AI chatbot settings
+
+### `GET /settings/ai-chatbot?workspaceId={uuid}`
+Returns workspace-level AI chatbot webhook configuration.
+
+Response `200`:
+```json
+{
+  "data": {
+    "workspace_id": "6a327bb8-f9e4-4f0d-8f72-b0c39b3ef8ea",
+    "ai_router_webhook_url": "https://example.ngrok-free.dev/webhook/wa/ai-router"
+  },
+  "error": null
+}
+```
+
+### `POST /settings/ai-chatbot?workspaceId={uuid}`
+Upserts workspace-level AI router webhook URL.
+
+Request:
+```json
+{
+  "ai_router_webhook_url": "https://example.ngrok-free.dev/webhook/wa/ai-router"
+}
+```
+
+Notes:
+- Field is required and must start with `http://` or `https://`.
+- Main versioned path is under `/api/v1`.
+- Compatibility alias is available at `/api/settings/ai-chatbot`.
+
+Response `200`:
+```json
+{
+  "data": {
+    "workspace_id": "6a327bb8-f9e4-4f0d-8f72-b0c39b3ef8ea",
+    "ai_router_webhook_url": "https://example.ngrok-free.dev/webhook/wa/ai-router"
+  },
+  "error": null
+}
+```
+
+## 3.14 Automation playbooks
 
 ### `GET /automations/playbooks?workspaceId={uuid}`
 Returns playbook enablement status for workspace automations.
@@ -1096,3 +1138,11 @@ Notes:
   - Added `POST /automations/playbooks`.
   - Added `automation_playbooks` table.
   - n8n quick/follow-up/final recovery webhooks now run only when `sales_recovery` playbook is enabled.
+- Date: 2026-03-07
+- Change: Added configurable AI chatbot webhook settings and inbound forwarding endpoint integration.
+- Type: Non-breaking (new endpoints + table extension + runtime webhook call).
+- Impact:
+  - Added `GET /settings/ai-chatbot`.
+  - Added `POST /settings/ai-chatbot`.
+  - Extended `automation_settings` with `ai_router_webhook_url`.
+  - Added inbound message forwarding payload dispatch to workspace-configured AI router webhook.

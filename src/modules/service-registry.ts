@@ -30,6 +30,7 @@ import { SalesAssistantService } from "./sales-assistant/sales-assistant.service
 import { WhatsAppSessionManager } from "./whatsapp-session/whatsapp-session.manager";
 import { WhatsAppSessionRepository } from "./whatsapp-session/whatsapp-session.repository";
 import { N8nAutomationsService } from "../services/n8n-automations";
+import { N8nChatbotService } from "../services/n8n-chatbot";
 
 const conversationRepository = new ConversationRepository();
 const messageIngestionService = new MessageIngestionService();
@@ -75,6 +76,7 @@ const n8nAutomationsService = new N8nAutomationsService(
   automationSettingsService,
   automationPlaybooksService
 );
+const n8nChatbotService = new N8nChatbotService(automationSettingsService);
 const offerOptimizerRepository = new OfferOptimizerRepository();
 const offerOptimizerService = new OfferOptimizerService(offerOptimizerRepository);
 const dealProbabilityRepository = new DealProbabilityRepository();
@@ -95,7 +97,8 @@ const conversationService = new ConversationService(
   conversationRepository,
   recoveryService,
   abandonedDetectorService,
-  n8nAutomationsService
+  n8nAutomationsService,
+  n8nChatbotService
 );
 
 export const services = {
@@ -114,5 +117,6 @@ export const services = {
   revenueIntelligenceService,
   salesAssistantService,
   n8nAutomationsService,
+  n8nChatbotService,
   whatsappSessionManager
 };

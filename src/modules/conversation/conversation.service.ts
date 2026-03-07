@@ -10,6 +10,10 @@ import {
   type N8nAutomationLead,
   N8nAutomationsService
 } from "../../services/n8n-automations";
+import {
+  type N8nChatbotInboundPayload,
+  N8nChatbotService
+} from "../../services/n8n-chatbot";
 import { ConversationRepository } from "./conversation.repository";
 
 export class ConversationService {
@@ -17,7 +21,8 @@ export class ConversationService {
     private readonly repository: ConversationRepository,
     private readonly recoveryService: RecoveryService,
     private readonly abandonedDetectorService: AbandonedDetectorService,
-    private readonly n8nAutomationsService: N8nAutomationsService
+    private readonly n8nAutomationsService: N8nAutomationsService,
+    private readonly n8nChatbotService: N8nChatbotService
   ) {}
 
   registerEventHandlers(): void {
@@ -103,6 +108,23 @@ export class ConversationService {
         lastMessageTime: payload.occurredAt,
         status: "open"
       });
+
+      if (this.shouldForwardInboundTextMessage(payload)) {
+        const leadStatus = existingConversation?.status ?? "new";
+        const conversationIdForWebhook =
+          existingConversation?.id ??
+          this.buildStableConversationId(event.workspaceId, contact.phoneE164);
+
+        this.triggerAiChatbotWebhook({
+          workspace_id: event.workspaceId,
+          phone: contact.phoneE164,
+          lead_name: contact.displayName ?? payload.contactName ?? "",
+          message: payload.bodyText?.trim() ?? "",
+          lead_status: leadStatus,
+          conversation_id: conversationIdForWebhook,
+          timestamp: payload.occurredAt
+        });
+      }
     }
 
     await this.repository.logDomainEvent(
@@ -116,6 +138,32 @@ export class ConversationService {
 
   private triggerRecoveryAutomations(lead: N8nAutomationLead): void {
     void this.n8nAutomationsService.triggerSalesRecoveryPlaybook(lead);
+  }
+
+  private triggerAiChatbotWebhook(payload: N8nChatbotInboundPayload): void {
+    void this.n8nChatbotService.forwardIncomingMessageToAiRouter(payload);
+  }
+
+  private shouldForwardInboundTextMessage(
+    payload: MessageReceivedEvent["payload"]
+  ): boolean {
+    if (payload.direction !== "inbound") {
+      return false;
+    }
+
+    const bodyText = payload.bodyText?.trim() ?? "";
+    if (!bodyText) {
+      return false;
+    }
+
+    return (
+      payload.messageType === "conversation" ||
+      payload.messageType === "extendedTextMessage"
+    );
+  }
+
+  private buildStableConversationId(workspaceId: string, phone: string): string {
+    return `${workspaceId}:${phone}`;
   }
 
   async listConversations(input: {

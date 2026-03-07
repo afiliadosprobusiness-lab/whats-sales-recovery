@@ -3,4 +3,5 @@ export type WorkspaceAutomationSettings = {
   quickRecoveryWebhook: string | null;
   followupRecoveryWebhook: string | null;
   finalRecoveryWebhook: string | null;
+  aiRouterWebhookUrl: string | null;
 };

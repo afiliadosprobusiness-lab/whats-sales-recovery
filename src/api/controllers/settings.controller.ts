@@ -31,6 +31,16 @@ const upsertAutomationsSettingsSchema = z.object({
   final_recovery_webhook: webhookSchema
 });
 
+const upsertAiChatbotSettingsSchema = z.object({
+  ai_router_webhook_url: z
+    .string()
+    .trim()
+    .min(1, "AI Router Webhook URL is required")
+    .refine((value) => /^https?:\/\//i.test(value), {
+      message: "AI Router Webhook URL must start with http:// or https://"
+    })
+});
+
 function sendValidationError(res: Response, message: string): void {
   res.status(400).json({
     data: null,
@@ -128,6 +138,92 @@ export async function updateAutomationsSettings(
       error: {
         code: "INTERNAL_ERROR",
         message: "Could not update automations settings"
+      }
+    });
+  }
+}
+
+export async function getAiChatbotSettings(
+  req: Request,
+  res: Response
+): Promise<void> {
+  const parsedQuery = workspaceQuerySchema.safeParse(req.query);
+  if (!parsedQuery.success) {
+    sendValidationError(
+      res,
+      parsedQuery.error.issues[0]?.message ?? "Invalid query"
+    );
+    return;
+  }
+
+  try {
+    const settings =
+      await services.automationSettingsService.getWorkspaceAiChatbotSettings(
+        parsedQuery.data.workspaceId
+      );
+
+    res.status(200).json({
+      data: {
+        workspace_id: settings.workspaceId,
+        ai_router_webhook_url: settings.aiRouterWebhookUrl
+      },
+      error: null
+    });
+  } catch (error) {
+    logger.error({ error }, "Failed to load AI chatbot settings");
+    res.status(500).json({
+      data: null,
+      error: {
+        code: "INTERNAL_ERROR",
+        message: "Could not load AI chatbot settings"
+      }
+    });
+  }
+}
+
+export async function updateAiChatbotSettings(
+  req: Request,
+  res: Response
+): Promise<void> {
+  const parsedQuery = workspaceQuerySchema.safeParse(req.query);
+  if (!parsedQuery.success) {
+    sendValidationError(
+      res,
+      parsedQuery.error.issues[0]?.message ?? "Invalid query"
+    );
+    return;
+  }
+
+  const parsedBody = upsertAiChatbotSettingsSchema.safeParse(req.body);
+  if (!parsedBody.success) {
+    sendValidationError(
+      res,
+      parsedBody.error.issues[0]?.message ?? "Invalid body"
+    );
+    return;
+  }
+
+  try {
+    const settings =
+      await services.automationSettingsService.updateWorkspaceAiChatbotSettings({
+        workspaceId: parsedQuery.data.workspaceId,
+        aiRouterWebhookUrl: parsedBody.data.ai_router_webhook_url
+      });
+
+    res.status(200).json({
+      data: {
+        workspace_id: settings.workspaceId,
+        ai_router_webhook_url: settings.aiRouterWebhookUrl
+      },
+      error: null
+    });
+  } catch (error) {
+    logger.error({ error }, "Failed to update AI chatbot settings");
+    res.status(500).json({
+      data: null,
+      error: {
+        code: "INTERNAL_ERROR",
+        message: "Could not update AI chatbot settings"
       }
     });
   }

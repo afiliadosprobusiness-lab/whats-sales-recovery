@@ -39,7 +39,7 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
 - CampaignContact: per-contact delivery/reply status for campaign.
 - CampaignMessage: outbound attempt linked to campaign contact.
 - WorkspaceSettings: workspace-level chatbot configuration and sales style.
-- AutomationSettings: workspace-level n8n webhook endpoints.
+- AutomationSettings: workspace-level n8n webhook endpoints, including AI router webhook URL.
 - AutomationPlaybook: workspace-level enablement state for automation bundles.
 - ChatbotLog: assistant customer/bot exchange log for audit and metrics.
 - OfferEvent: objection detection and optimized offer recommendation record.
@@ -371,6 +371,22 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
 6. If playbook is disabled, webhook dispatch is skipped.
 7. Webhook errors are logged and never break the main ingestion flow.
 
+### Flow Q: Workspace AI chatbot webhook forwarding on inbound messages
+1. Workspace user configures AI Router Webhook URL in `Dashboard -> Settings -> AI Chatbot`.
+2. Dashboard persists value via `POST /settings/ai-chatbot?workspaceId={uuid}`.
+3. On each inbound lead interaction (`message_received`), conversation module builds chatbot payload:
+   - `workspace_id`
+   - `phone`
+   - `lead_name`
+   - `message`
+   - `lead_status`
+   - `conversation_id`
+   - `timestamp`
+4. n8n chatbot service loads `ai_router_webhook_url` from `automation_settings`.
+5. If webhook URL is configured, service dispatches async `POST` to the configured URL.
+6. If webhook URL is empty/not configured, forwarding is skipped.
+7. Webhook errors are logged and never break main ingestion flow.
+
 ## 6) Runtime architecture
 - Modular monolith (single backend service).
 - Separate frontend apps built with Next.js + TypeScript:
@@ -402,6 +418,7 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
 - Campaign sender worker runs continuously and enforces 5-10s delay between campaign sends.
 - Sales assistant uses in-process immediate handling on inbound events with 2-4s response pacing.
 - n8n automation webhooks run asynchronously on inbound lead interactions, gated by playbook enablement, and do not block conversation processing.
+- AI chatbot webhook forwarding runs asynchronously on inbound messages and does not block conversation processing.
 - In-memory event bus for intra-process domain events.
 - Express API includes CORS allowlist for:
   - `https://recuperaventas-dashboard.vercel.app`
@@ -444,7 +461,7 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
   - Consumes `customer_ready_to_buy` to send proactive closing messages.
   - Consumes `offer_recommended` to send objection-aware optimized offers.
 - `automation-settings`
-  - Stores workspace-level n8n webhook endpoints.
+  - Stores workspace-level n8n webhook endpoints including `ai_router_webhook_url`.
   - Exposes get/update use cases for dashboard configuration.
 - `automation-playbooks`
   - Stores workspace-level playbook enablement (`sales_recovery`).
@@ -454,6 +471,10 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
   - Checks playbook state from `automation_playbooks` before dispatching webhooks.
   - Triggers quick/follow-up/final webhook calls on inbound lead interactions.
   - Handles webhook failures with non-blocking logging.
+- `n8n-chatbot`
+  - Loads workspace AI router webhook URL from `automation_settings`.
+  - Forwards inbound WhatsApp lead payloads to configured AI router webhook URL.
+  - Handles forwarding failures with non-blocking logging.
 - `offer-optimizer`
   - Detects objection keywords from inbound customer messages.
   - Maps objection categories to offer strategies (discount, urgency, bonus, delivery incentive, reservation).
@@ -521,9 +542,13 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
 - `GET /api/v1/revenue-reports/history`
 - `GET /api/v1/settings/automations`
 - `POST /api/v1/settings/automations`
+- `GET /api/v1/settings/ai-chatbot`
+- `POST /api/v1/settings/ai-chatbot`
 - `GET /api/v1/automations/playbooks`
 - `POST /api/v1/automations/playbooks`
 - `POST /api/automations/playbooks` (compatibility alias)
+- `GET /api/settings/ai-chatbot` (compatibility alias)
+- `POST /api/settings/ai-chatbot` (compatibility alias)
 
 ## 9) Frontend routes
 - Landing app (`apps/landing`):
@@ -560,7 +585,7 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
   - `/analytics`
     - Recovered revenue, follow-up performance, and conversion chart placeholders.
   - `/settings`
-    - Advanced settings route; webhook infrastructure remains hidden from normal users.
+    - Workspace settings route including AI Chatbot webhook URL configuration.
   - `/conversations/:id`
     - Message timeline, latest recovery status, action `Mark sale recovered`.
 

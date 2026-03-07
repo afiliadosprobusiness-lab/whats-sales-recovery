@@ -18,4 +18,17 @@ export class AutomationSettingsService {
   }): Promise<WorkspaceAutomationSettings> {
     return this.repository.upsertWorkspaceSettings(input);
   }
+
+  async getWorkspaceAiChatbotSettings(
+    workspaceId: string
+  ): Promise<WorkspaceAutomationSettings> {
+    return this.repository.getWorkspaceSettings(workspaceId);
+  }
+
+  async updateWorkspaceAiChatbotSettings(input: {
+    workspaceId: string;
+    aiRouterWebhookUrl: string;
+  }): Promise<WorkspaceAutomationSettings> {
+    return this.repository.upsertWorkspaceAiChatbotSettings(input);
+  }
 }

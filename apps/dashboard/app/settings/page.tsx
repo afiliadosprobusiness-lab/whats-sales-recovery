@@ -1,18 +1,24 @@
 import { requireAuthenticatedUser } from "@/lib/auth-session";
+import { getApiBaseConfig } from "@/lib/api";
+import { SettingsClient } from "./settings-client";
 
 export const dynamic = "force-dynamic";
 
 export default function SettingsPage(): JSX.Element {
   requireAuthenticatedUser();
 
-  return (
-    <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
-      <h2 className="text-3xl font-semibold text-white">Advanced Settings</h2>
-      <p className="mt-3 max-w-2xl text-sm text-slate-300">
-        Webhook infrastructure is managed internally. Normal users should use
-        <span className="text-cyan-200"> Automations </span>
-        to enable or disable playbooks.
-      </p>
-    </section>
-  );
+  const config = getApiBaseConfig();
+  if (!config.configured) {
+    return (
+      <section className="rounded-2xl border border-amber-400/30 bg-amber-500/10 p-6">
+        <h2 className="text-2xl font-semibold text-white">Settings</h2>
+        <p className="mt-3 text-sm text-amber-100">
+          Missing API configuration. Add `NEXT_PUBLIC_API_BASE_URL` to
+          `apps/dashboard/.env.local`.
+        </p>
+      </section>
+    );
+  }
+
+  return <SettingsClient />;
 }

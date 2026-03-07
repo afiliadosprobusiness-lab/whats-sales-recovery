@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS automation_settings (
   quick_recovery_webhook TEXT,
   followup_recovery_webhook TEXT,
   final_recovery_webhook TEXT,
+  ai_router_webhook_url TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
