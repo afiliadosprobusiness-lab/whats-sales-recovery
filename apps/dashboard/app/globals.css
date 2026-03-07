@@ -319,10 +319,11 @@ a:hover {
   background: #f8fbff;
   border-radius: 0.7rem;
   padding: 0.85rem;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  max-height: 300px;
-  overflow: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  max-width: 100%;
 }
 
 @media (max-width: 1100px) {

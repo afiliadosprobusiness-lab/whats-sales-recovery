@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import {
   createWorkspace,
   getDefaultWorkspaceId,
@@ -181,7 +182,15 @@ export function ConnectWhatsappClient(): JSX.Element {
         {!connected && qr ? (
           <div className="qr-wrap">
             <p className="muted">Scan this QR with WhatsApp on your phone.</p>
-            <pre className="qr-box">{qr}</pre>
+            <div className="qr-box" aria-label="WhatsApp QR code">
+              <QRCodeSVG
+                key={qr}
+                value={qr}
+                size={256}
+                includeMargin
+                level="M"
+              />
+            </div>
           </div>
         ) : null}
 

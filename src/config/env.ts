@@ -16,7 +16,10 @@ const envSchema = z.object({
   WHATSAPP_SESSION_DATA_PATH: z.string().min(1),
   IDLE_THRESHOLD_HOURS: z.coerce.number().int().positive().default(24),
   RECOVERY_TEMPLATE_TEXT: z.string().min(1).default(defaultRecoveryTemplate),
-  LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info")
+  LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
+  OPENAI_API_KEY: z.string().min(1).optional(),
+  OPENAI_MODEL: z.string().min(1).default("gpt-4o-mini"),
+  OPENAI_BASE_URL: z.string().url().default("https://api.openai.com/v1")
 });
 
 export const env = envSchema.parse(process.env);

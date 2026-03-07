@@ -212,6 +212,113 @@ Response `200`:
 }
 ```
 
+## 3.4 Campaigns (bulk recovery)
+
+### `POST /campaigns/import?workspaceId={uuid}&campaignName={optional}`
+Imports a CSV contact list and creates a bulk recovery campaign.
+
+Headers:
+```text
+Content-Type: text/csv
+```
+
+Body (CSV):
+```csv
+name,phone
+John,51999911111
+```
+
+Response `201`:
+```json
+{
+  "data": {
+    "campaignId": "f4de2c0d-4207-4fef-9693-0357f0954e7f",
+    "workspaceId": "6a327bb8-f9e4-4f0d-8f72-b0c39b3ef8ea",
+    "name": "Campaign 2026-03-07T18:30:00.000Z",
+    "status": "queued",
+    "contactsTotal": 1,
+    "messagesScheduled": 1
+  },
+  "error": null
+}
+```
+
+### `GET /campaigns/{campaignId}/metrics?workspaceId={uuid}`
+Returns dashboard metrics for a campaign.
+
+Response `200`:
+```json
+{
+  "data": {
+    "campaignId": "f4de2c0d-4207-4fef-9693-0357f0954e7f",
+    "contacts_total": 120,
+    "messages_sent": 115,
+    "replies": 18,
+    "recovered_sales": 7
+  },
+  "error": null
+}
+```
+
+## 3.5 Sales assistant
+
+### `GET /sales-assistant/settings?workspaceId={uuid}`
+Returns workspace-level sales assistant configuration.
+
+Response `200`:
+```json
+{
+  "data": {
+    "workspace_id": "6a327bb8-f9e4-4f0d-8f72-b0c39b3ef8ea",
+    "chatbot_enabled": true,
+    "chatbot_style": "consultivo",
+    "chatbot_product_context": "Vendemos zapatillas con delivery en Lima."
+  },
+  "error": null
+}
+```
+
+### `PATCH /sales-assistant/settings`
+Upserts workspace-level sales assistant configuration.
+
+Request:
+```json
+{
+  "workspaceId": "6a327bb8-f9e4-4f0d-8f72-b0c39b3ef8ea",
+  "chatbotEnabled": true,
+  "chatbotStyle": "consultivo",
+  "chatbotProductContext": "Vendemos zapatillas con delivery en Lima."
+}
+```
+
+Response `200`:
+```json
+{
+  "data": {
+    "workspace_id": "6a327bb8-f9e4-4f0d-8f72-b0c39b3ef8ea",
+    "chatbot_enabled": true,
+    "chatbot_style": "consultivo",
+    "chatbot_product_context": "Vendemos zapatillas con delivery en Lima."
+  },
+  "error": null
+}
+```
+
+### `GET /sales-assistant/metrics?workspaceId={uuid}`
+Returns dashboard counters for sales assistant performance.
+
+Response `200`:
+```json
+{
+  "data": {
+    "chatbot_messages_sent": 42,
+    "chatbot_conversations_handled": 18,
+    "chatbot_sales_closed": 5
+  },
+  "error": null
+}
+```
+
 ## 4) Domain event contract (Sprint 2)
 
 ### `message_received`
@@ -352,3 +459,17 @@ Response `200`:
 - Type: Non-breaking (response field extension).
 - Impact:
   - `GET /conversations` now includes optional `contactPhone`.
+- Date: 2026-03-07
+- Change: Added campaigns bulk import and campaign metrics endpoints.
+- Type: Non-breaking (new endpoints).
+- Impact:
+  - Added `POST /campaigns/import`.
+  - Added `GET /campaigns/{campaignId}/metrics`.
+- Date: 2026-03-07
+- Change: Added sales-closing assistant settings and dashboard metrics endpoints.
+- Type: Non-breaking (new endpoints + runtime automation).
+- Impact:
+  - Added `GET /sales-assistant/settings`.
+  - Added `PATCH /sales-assistant/settings`.
+  - Added `GET /sales-assistant/metrics`.
+  - Added workspace chatbot configuration + chatbot interaction logs in database.
