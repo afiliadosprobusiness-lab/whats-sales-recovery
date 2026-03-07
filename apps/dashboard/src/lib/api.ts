@@ -1,0 +1,352 @@
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3000/api/v1";
+const WORKSPACE_ID = process.env.NEXT_PUBLIC_WORKSPACE_ID ?? "";
+const WORKSPACE_STORAGE_KEY = "recuperaventas_workspace_id";
+
+type ApiError = {
+  code: string;
+  message: string;
+};
+
+type ApiResponse<T> = {
+  data: T | null;
+  error: ApiError | null;
+};
+
+type OnboardingErrorResponse = {
+  error?: ApiError;
+};
+
+export type ConversationItem = {
+  id: string;
+  workspaceId: string;
+  contactId: string;
+  contactPhone?: string | null;
+  whatsappSessionId: string;
+  status: "open" | "idle" | "closed";
+  lastCustomerMessageAt: string | null;
+  lastBusinessMessageAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ConversationMessage = {
+  id: string;
+  providerMessageId: string;
+  direction: "inbound" | "outbound";
+  messageType: string;
+  bodyText: string | null;
+  sentAt: string | null;
+  receivedAt: string | null;
+  createdAt: string;
+};
+
+export type RecoverySummary = {
+  id: string;
+  status: "scheduled" | "sent" | "replied" | "recovered" | "failed";
+  scheduledAt: string;
+  sentAt: string | null;
+  repliedAt: string | null;
+};
+
+export type ConversationDetail = {
+  conversation: ConversationItem;
+  messages: ConversationMessage[];
+  latest_recovery: RecoverySummary | null;
+  is_recovered: boolean;
+  recovery_status: RecoverySummary["status"] | null;
+  sale_recovered: boolean;
+  recovered_amount: number | null;
+};
+
+export type ConversationSummary = {
+  conversationId: string;
+  contactPhone: string;
+  lastMessage: string;
+  status: ConversationItem["status"];
+  recoveryStatus: RecoverySummary["status"] | "none";
+  saleRecovered: boolean;
+  recoveredAmount: number;
+  latestRecoveryId: string | null;
+};
+
+export type DashboardMetrics = {
+  totalConversations: number;
+  idleConversations: number;
+  recoveryMessagesSent: number;
+  recoveredSales: number;
+  recoveredRevenue: number;
+};
+
+function isConfigured(): boolean {
+  return Boolean(API_BASE_URL && WORKSPACE_ID);
+}
+
+async function fetchApi<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(init?.headers ?? {})
+    },
+    cache: "no-store"
+  });
+
+  const payload = (await response.json()) as ApiResponse<T>;
+  if (!response.ok || payload.error || !payload.data) {
+    throw new Error(payload.error?.message ?? `API request failed: ${path}`);
+  }
+
+  return payload.data;
+}
+
+function getOnboardingErrorMessage(payload: unknown, fallback: string): string {
+  if (payload && typeof payload === "object" && "error" in payload) {
+    const errorPayload = payload as OnboardingErrorResponse;
+    if (errorPayload.error?.message) {
+      return errorPayload.error.message;
+    }
+  }
+
+  return fallback;
+}
+
+export async function getConversations(): Promise<ConversationItem[]> {
+  if (!isConfigured()) {
+    return [];
+  }
+
+  const query = new URLSearchParams({
+    workspaceId: WORKSPACE_ID,
+    limit: "100",
+    offset: "0"
+  });
+
+  const data = await fetchApi<{
+    items: ConversationItem[];
+    pagination: { limit: number; offset: number };
+  }>(`/conversations?${query.toString()}`);
+
+  return data.items;
+}
+
+export async function getConversationById(
+  conversationId: string,
+  messageLimit = 100
+): Promise<ConversationDetail | null> {
+  if (!isConfigured()) {
+    return null;
+  }
+
+  const query = new URLSearchParams({
+    workspaceId: WORKSPACE_ID,
+    messageLimit: String(messageLimit)
+  });
+
+  try {
+    return await fetchApi<ConversationDetail>(
+      `/conversations/${conversationId}?${query.toString()}`
+    );
+  } catch {
+    return null;
+  }
+}
+
+export async function getConversationSummaries(): Promise<ConversationSummary[]> {
+  const list = await getConversations();
+  const detailResults = await Promise.all(
+    list.map((conversation) => getConversationById(conversation.id, 30))
+  );
+
+  return list.map((conversation, index) => {
+    const detail = detailResults[index];
+    const lastMessageText =
+      detail?.messages[detail.messages.length - 1]?.bodyText?.trim() || "-";
+    const recoveryStatus = detail?.recovery_status ?? "none";
+    const recoveredAmount = detail?.recovered_amount ?? 0;
+
+    return {
+      conversationId: conversation.id,
+      contactPhone: conversation.contactPhone || conversation.contactId,
+      lastMessage: lastMessageText,
+      status: conversation.status,
+      recoveryStatus,
+      saleRecovered: detail?.sale_recovered ?? false,
+      recoveredAmount,
+      latestRecoveryId: detail?.latest_recovery?.id ?? null
+    };
+  });
+}
+
+export async function getDashboardMetrics(): Promise<DashboardMetrics> {
+  const summaries = await getConversationSummaries();
+
+  const recoveryMessagesSent = summaries.filter((item) =>
+    ["sent", "replied", "recovered"].includes(item.recoveryStatus)
+  ).length;
+  const recoveredSales = summaries.filter((item) => item.saleRecovered).length;
+  const recoveredRevenue = summaries.reduce(
+    (acc, item) => acc + item.recoveredAmount,
+    0
+  );
+
+  return {
+    totalConversations: summaries.length,
+    idleConversations: summaries.filter((item) => item.status === "idle").length,
+    recoveryMessagesSent,
+    recoveredSales,
+    recoveredRevenue
+  };
+}
+
+export async function postMarkSaleRecovered(input: {
+  recoveryId: string;
+  amount: number;
+  currency: string;
+}): Promise<void> {
+  const response = await fetch(
+    `${API_BASE_URL}/recoveries/${input.recoveryId}/mark-sale`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        amount: input.amount,
+        currency: input.currency
+      })
+    }
+  );
+
+  const payload = (await response.json()) as ApiResponse<Record<string, unknown>>;
+  if (!response.ok || payload.error) {
+    throw new Error(payload.error?.message ?? "Could not mark recovered sale");
+  }
+}
+
+export async function createWorkspace(input: {
+  name: string;
+}): Promise<{ workspaceId: string }> {
+  const response = await fetch(`${API_BASE_URL}/workspaces`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      name: input.name
+    })
+  });
+
+  const payload = (await response.json()) as
+    | { workspace_id: string }
+    | OnboardingErrorResponse;
+
+  if (!response.ok || !("workspace_id" in payload)) {
+    throw new Error(getOnboardingErrorMessage(payload, "Could not create workspace"));
+  }
+
+  return { workspaceId: payload.workspace_id };
+}
+
+export async function startWhatsappSessionByWorkspace(input: {
+  workspaceId: string;
+}): Promise<{ qr: string }> {
+  const response = await fetch(`${API_BASE_URL}/whatsapp/session/start`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      workspace_id: input.workspaceId
+    })
+  });
+
+  const payload = (await response.json()) as { qr: string } | OnboardingErrorResponse;
+  if (!response.ok || !("qr" in payload)) {
+    throw new Error(
+      getOnboardingErrorMessage(payload, "Could not start WhatsApp session")
+    );
+  }
+
+  return {
+    qr: payload.qr
+  };
+}
+
+export async function getWhatsappSessionStatusByWorkspace(input: {
+  workspaceId: string;
+}): Promise<{ connected: boolean }> {
+  const query = new URLSearchParams({
+    workspace_id: input.workspaceId
+  });
+
+  const response = await fetch(
+    `${API_BASE_URL}/whatsapp/session/status?${query.toString()}`,
+    {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      cache: "no-store"
+    }
+  );
+
+  const payload = (await response.json()) as
+    | { connected: boolean }
+    | OnboardingErrorResponse;
+
+  if (!response.ok || !("connected" in payload)) {
+    throw new Error(
+      getOnboardingErrorMessage(
+        payload,
+        "Could not get WhatsApp session status"
+      )
+    );
+  }
+
+  return {
+    connected: payload.connected
+  };
+}
+
+export function getStoredWorkspaceId(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  return window.localStorage.getItem(WORKSPACE_STORAGE_KEY);
+}
+
+export function saveWorkspaceId(workspaceId: string): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(WORKSPACE_STORAGE_KEY, workspaceId);
+}
+
+export function getDefaultWorkspaceId(): string {
+  return WORKSPACE_ID;
+}
+
+export function getWorkspaceConfig(): {
+  apiBaseUrl: string;
+  workspaceId: string;
+  configured: boolean;
+} {
+  return {
+    apiBaseUrl: API_BASE_URL,
+    workspaceId: WORKSPACE_ID,
+    configured: isConfigured()
+  };
+}
+
+export function getApiBaseConfig(): {
+  apiBaseUrl: string;
+  configured: boolean;
+} {
+  return {
+    apiBaseUrl: API_BASE_URL,
+    configured: Boolean(API_BASE_URL)
+  };
+}

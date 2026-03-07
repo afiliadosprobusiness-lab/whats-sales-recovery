@@ -1,0 +1,9 @@
+node_modules
+dist
+.next
+out
+.env
+.wwebjs_auth
+.wwebjs_cache
+coverage
+*.log
