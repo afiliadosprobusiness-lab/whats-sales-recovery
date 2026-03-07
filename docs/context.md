@@ -16,8 +16,10 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
   - Stop bot responses on human takeover, closed conversations, or opt-out contacts.
   - Detect idle conversations and schedule recovery attempts.
   - Send automated recovery message.
-  - Detect customer replies to sent recovery messages.
-  - Mark recovered sales and persist recovered amount.
+- Detect customer replies to sent recovery messages.
+- Mark recovered sales and persist recovered amount.
+- Analyze conversations and recovery outcomes to classify revenue opportunity states.
+- Execute multi-step follow-up sequences for prospects that stop responding.
 - Out of scope:
   - Advanced AI.
   - Multi-channel messaging.
@@ -38,15 +40,30 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
 - CampaignMessage: outbound attempt linked to campaign contact.
 - WorkspaceSettings: workspace-level chatbot configuration and sales style.
 - ChatbotLog: assistant customer/bot exchange log for audit and metrics.
+- OfferEvent: objection detection and optimized offer recommendation record.
+- DealProbability: conversation-level purchase probability score and lead state.
 - DomainEventLog: immutable event log for audit and tracing.
 
 ### Domain events
 - Active:
-  - `message_received`
-  - `conversation_idle`
-  - `recovery_triggered`
-  - `recovery_sent`
-  - `recovery_failed`
+- `message_received`
+- `offer_recommended`
+- `conversation_idle`
+- `conversation_abandoned`
+- `manual_followup_trigger`
+- `customer_ready_to_buy`
+- `customer_lost`
+- `customer_reactivatable`
+- `customer_ready_to_close`
+- `customer_warm_lead`
+- `customer_cold_lead`
+- `heatmap_insight_generated`
+- `playbook_high_performance`
+- `revenue_report_generated`
+- `revenue_report_insight_generated`
+- `recovery_triggered`
+- `recovery_sent`
+- `recovery_failed`
   - `customer_replied`
   - `sale_recovered`
 
@@ -70,6 +87,28 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
 - `campaign_messages`
 - `workspace_settings`
 - `chatbot_logs`
+
+### Sprint 6 operational tables
+- `customer_revenue_state`
+
+### Sprint 7 operational tables
+- `followup_sequences`
+- `followup_sequence_steps`
+
+### Sprint 8 operational tables
+- `offer_events`
+
+### Sprint 9 operational tables
+- `deal_probability`
+
+### Sprint 10 operational tables
+- `conversation_stage_metrics`
+
+### Sprint 11 operational tables
+- `conversation_playbooks`
+
+### Sprint 12 operational tables
+- `revenue_reports`
 
 ### Future sprint tables (already scaffolded)
 - `templates`
@@ -116,7 +155,21 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
 8. Updates attempt status to `sent` or `failed`.
 9. Emits `recovery_triggered`, `recovery_sent`, `recovery_failed`.
 
-### Flow E: Reply detection and recovered sale tracking
+### Flow E: Abandoned intent detection and recovery automation
+1. Inbound customer message is stored in conversation.
+2. Intent classifier checks keywords (`precio`, `cuanto`, `costo`, `delivery`, `envio`, `disponible`, `tiene`, `stock`).
+3. If matched, conversation is marked `purchase_intent = true`.
+4. Abandoned detector worker runs every 5 minutes.
+5. Worker scans conversations where:
+   - `purchase_intent = true`
+   - `abandoned = false`
+   - `status != closed`
+   - `last_customer_message_at` exceeds `ABANDONED_THRESHOLD_MINUTES`
+   - no `sale_outcomes` exists for conversation
+6. Worker marks conversation `abandoned = true`, sets `abandoned_at`, and emits `conversation_abandoned`.
+7. Recovery engine consumes `conversation_abandoned` and schedules a recovery attempt using existing eligibility guards.
+
+### Flow F: Reply detection and recovered sale tracking
 1. Customer replies after recovery message was sent.
 2. System finds latest recovery attempt with `status = sent` for that conversation.
 3. System updates attempt to `status = replied`, sets `replied_at = now`.
@@ -127,7 +180,7 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
 8. System marks conversation as `closed`.
 9. Emits `sale_recovered`.
 
-### Flow F: Bulk campaign import and sending
+### Flow G: Bulk campaign import and sending
 1. User imports CSV via `POST /campaigns/import`.
 2. System creates `campaigns` record and upserts contacts.
 3. System inserts `campaign_contacts` and `campaign_messages` in `scheduled`.
@@ -137,7 +190,7 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
 7. On inbound `message_received`, matching campaign contact is marked `replied`.
 8. Dashboard metrics are aggregated from campaign tables and sale outcomes.
 
-### Flow G: Sales assistant auto-reply
+### Flow H: Sales assistant auto-reply
 1. Inbound message is received from WhatsApp (`fromMe = false`).
 2. Message ingestion publishes `message_received` and invokes sales assistant pipeline.
 3. Sales assistant loads workspace settings and conversation context.
@@ -148,11 +201,151 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
 8. Assistant stores interaction in `chatbot_logs`.
 9. If agent sends outbound message (`fromMe = true`), assistant marks human takeover and stops replying on that conversation.
 
+### Flow I: Revenue intelligence scoring and classification
+1. Revenue intelligence worker runs every 10 minutes.
+2. Worker scans recent conversations, messages, recovery attempts, campaign outcomes, and sales outcomes.
+3. Worker computes `conversion_probability` (0 to 1) using weighted factors.
+4. Worker classifies each conversation/customer as:
+   - `READY_TO_BUY`
+   - `LOST_CUSTOMER`
+   - `REACTIVATABLE`
+   - `ACTIVE_CONVERSATION`
+5. Worker upserts `customer_revenue_state`.
+6. Worker emits:
+   - `customer_ready_to_buy`
+   - `customer_lost`
+   - `customer_reactivatable`
+7. Sales assistant consumes `customer_ready_to_buy` to send a closing message.
+8. Recovery engine consumes `customer_reactivatable` to schedule a recovery attempt.
+
+### Flow J: Smart follow-up sequencing
+1. Trigger events (`conversation_abandoned`, `customer_reactivatable`, `manual_followup_trigger`) start a follow-up sequence.
+2. Sequence is created with 4 default steps (30m, 4h, 24h, 3d) in pending status.
+3. Follow-up worker runs every 2 minutes and checks due pending steps.
+4. If delay is reached, sequencer sends the step through sales-assistant -> whatsapp-session pipeline.
+5. Step status moves to `sent` and sequence advances current step.
+6. Sequence completes after the last step is sent.
+7. Sequence is cancelled automatically if:
+   - customer replies (`message_received`)
+   - conversation is closed
+   - sale is recorded (`sale_recovered`)
+
+### Flow K: Offer optimizer and recommendation
+1. Inbound customer message is persisted in conversation/message tables.
+2. Offer optimizer scans message text with objection keywords:
+   - `PRICE_OBJECTION`
+   - `DELAY_OBJECTION`
+   - `AVAILABILITY_OBJECTION`
+   - `DELIVERY_QUESTION`
+3. Module maps objection to offer strategy and builds optimized message.
+4. Module writes `offer_events` record with objection, offer, and trigger timestamp.
+5. Module emits `offer_recommended` domain event.
+6. Sales assistant consumes `offer_recommended` and prioritizes optimized reply.
+7. On recovered sale (`sale_recovered`), latest open offer record is marked `converted = true`.
+
+### Flow L: Deal probability scoring and lead-state events
+1. Deal probability worker runs every 10 minutes.
+2. Worker scans active conversations and detects signals:
+   - `PRICE_QUERY`
+   - `DELIVERY_QUERY`
+   - `AVAILABILITY_QUERY`
+   - `DISCOUNT_REQUEST`
+   - `RETURN_AFTER_FOLLOWUP`
+   - `MULTIPLE_MESSAGES`
+3. Worker computes probability score (0 to 1) using weighted model.
+4. Worker classifies lead state:
+   - `READY_TO_CLOSE` when score `> 0.75`
+   - `WARM_LEAD` when score `0.40 - 0.75`
+   - `COLD_LEAD` when score `< 0.40`
+5. Worker upserts score/state into `deal_probability`.
+6. Worker emits:
+   - `customer_ready_to_close`
+   - `customer_warm_lead`
+   - `customer_cold_lead`
+7. Event consumers:
+   - `offer-optimizer` + `sales-assistant` consume `customer_ready_to_close`.
+   - `followup-sequencer` consumes `customer_warm_lead`.
+
+### Flow M: Conversation heatmap analytics and drop-off insights
+1. Conversation heatmap worker runs every 30 minutes.
+2. Worker scans recent inbound customer messages (30-day lookback).
+3. Worker classifies each message stage using keyword groups:
+   - `GREETING`
+   - `PRODUCT_INTEREST`
+   - `PRICE_DISCUSSION`
+   - `DELIVERY`
+   - `NEGOTIATION`
+   - `CLOSING`
+4. For each stage and workspace, worker computes:
+   - `message_count`
+   - `unique_customers`
+   - `dropoff_count`
+   - `dropoff_rate`
+5. Drop-off is detected when:
+   - customer message has no business reply within threshold window, or
+   - conversation is marked `abandoned = true`.
+6. Worker upserts metrics into `conversation_stage_metrics`.
+7. For stages where `dropoff_rate > 0.40`, module emits `heatmap_insight_generated`.
+8. Revenue-intelligence consumes `heatmap_insight_generated` and records the insight in `domain_event_logs`.
+
+### Flow N: Conversation playbook detection and high-performance signaling
+1. Playbook engine worker runs every 1 hour.
+2. Worker scans recent strategy messages from:
+   - chatbot responses (`chatbot_logs`)
+   - follow-up messages (`followup_sequence_steps`)
+   - offer messages (`offer_events`)
+3. Worker classifies responses into playbook patterns:
+   - `PRICE_RESPONSE`
+   - `URGENCY_MESSAGE`
+   - `DISCOUNT_MESSAGE`
+   - `DELIVERY_INCENTIVE`
+   - `RESERVATION_OFFER`
+4. Worker computes per-playbook metrics:
+   - `message_count`
+   - `sales_generated`
+   - `conversion_rate`
+5. Outcomes are inferred as:
+   - `SALE_COMPLETED`
+   - `CONVERSATION_ABANDONED`
+   - `NO_RESPONSE`
+6. Worker upserts metrics into `conversation_playbooks`.
+7. Worker detects top playbooks (`conversion_rate > workspace average`) and emits `playbook_high_performance`.
+8. Sales assistant consumes `playbook_high_performance` and prioritizes that strategy in generated responses.
+
+### Flow O: Automated revenue report generation and insights
+1. Revenue reports worker runs every 24 hours.
+2. Worker scans operational data sources:
+   - conversations
+   - sale outcomes and recovery attempts
+   - follow-up sequences and sent steps
+   - offer events
+   - deal probability snapshots
+3. Worker computes report metrics for:
+   - `DAILY`
+   - `WEEKLY`
+   - `MONTHLY`
+4. Stored fields per report:
+   - `total_leads`
+   - `active_conversations`
+   - `total_sales`
+   - `revenue_generated`
+   - `revenue_recovered`
+   - `conversion_rate`
+5. Worker also calculates source influence metrics:
+   - direct sales
+   - sales after follow-ups
+   - sales after offer optimizer
+   - sales after recovery
+6. Worker upserts rows in `revenue_reports`.
+7. Worker emits `revenue_report_generated`.
+8. If insight conditions are met (for example recovered revenue > 20% of total), worker emits `revenue_report_insight_generated`.
+
 ## 6) Runtime architecture
 - Modular monolith (single backend service).
 - Separate frontend apps built with Next.js + TypeScript:
   - `apps/dashboard` for operational management
   - `apps/landing` for public marketing and onboarding entrypoint
+  - `apps/landing` uses TailwindCSS and reusable section components based on the public SaaS landing design system.
   - Dashboard onboarding UI renders WhatsApp QR as SVG using `qrcode.react` for scanner compatibility.
 - In-process WhatsApp session sockets (`@whiskeysockets/baileys`).
   - Session auth state is persisted under `sessions/{workspace_id}` using `useMultiFileAuthState`.
@@ -164,7 +357,14 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
   - Incoming message observability logs are emitted from `messages.upsert`.
 - PostgreSQL as source of truth.
 - Redis + BullMQ available for async jobs (idle/recovery in next sprint).
-- Idle detector and recovery sender workers run on polling intervals.
+- Idle detector, abandoned detector, and recovery sender workers run on polling intervals.
+- Revenue intelligence worker runs every 10 minutes and publishes customer-state events.
+- Follow-up sequencer worker runs every 2 minutes to send scheduled sequence steps.
+- Offer optimizer worker runs every 2 minutes to analyze recent inbound messages and emit `offer_recommended`.
+- Deal probability worker runs every 10 minutes to compute lead probability and emit lead-state events.
+- Conversation heatmap worker runs every 30 minutes to compute stage drop-off metrics and high-dropoff insights.
+- Playbook engine worker runs every 1 hour to detect high-performing conversation strategies.
+- Revenue reports worker runs every 24 hours to persist daily/weekly/monthly revenue reports and insights.
 - Campaign sender worker runs continuously and enforces 5-10s delay between campaign sends.
 - Sales assistant uses in-process immediate handling on inbound events with 2-4s response pacing.
 - In-memory event bus for intra-process domain events.
@@ -187,10 +387,15 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
   - Create/reuse conversation.
   - Persist messages and activity timestamps.
 - `recovery`
-  - Consumes `conversation_idle` and creates scheduled attempts.
+  - Consumes `conversation_idle` and `conversation_abandoned` and creates scheduled attempts.
   - Sends recovery messages and updates attempt status.
   - Tracks replies after sent recovery.
   - Marks sale outcomes and recovered status.
+- `abandoned-detector`
+  - Classifies purchase intent from inbound customer text.
+  - Marks conversations as abandoned after configured threshold.
+  - Emits `conversation_abandoned`.
+  - Exposes abandonment dashboard metrics.
 - `campaigns`
   - Imports CSV contacts into campaign entities.
   - Schedules and sends outbound campaign messages sequentially.
@@ -201,6 +406,47 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
   - Applies workspace settings (`chatbot_enabled`, style, product context).
   - Stops on human takeover, closed conversation, or opt-out contact.
   - Persists chatbot interactions and dashboard counters.
+  - Consumes `customer_ready_to_buy` to send proactive closing messages.
+  - Consumes `offer_recommended` to send objection-aware optimized offers.
+- `offer-optimizer`
+  - Detects objection keywords from inbound customer messages.
+  - Maps objection categories to offer strategies (discount, urgency, bonus, delivery incentive, reservation).
+  - Emits `offer_recommended` and persists recommendation events in `offer_events`.
+  - Tracks recommendation metrics (`offers_triggered`, `offers_accepted`, `conversion_after_offer`).
+  - Marks offer conversion on `sale_recovered`.
+- `deal-probability`
+  - Calculates purchase probability score (0 to 1) per active conversation.
+  - Detects conversion signals from message content and follow-up returns.
+  - Classifies lead states (`READY_TO_CLOSE`, `WARM_LEAD`, `COLD_LEAD`).
+  - Persists scores in `deal_probability`.
+  - Emits lead-state events used by offer optimizer, sales assistant, and follow-up sequencer.
+- `conversation-heatmap`
+  - Classifies inbound customer messages into sales stages for analytics.
+  - Detects conversation drop-off by reply-threshold and abandoned status.
+  - Persists stage metrics in `conversation_stage_metrics`.
+  - Generates high drop-off insights and logs them through revenue-intelligence.
+- `playbook-engine`
+  - Analyzes chatbot, follow-up, and offer responses against conversation outcomes.
+  - Detects high-performing response playbooks and computes conversion metrics.
+  - Persists playbook metrics in `conversation_playbooks`.
+  - Emits `playbook_high_performance` for sales-assistant prioritization.
+- `revenue-reports`
+  - Aggregates revenue and conversion metrics across conversations, recovery, offers, follow-ups, and deal probability data.
+  - Persists periodic reports (`DAILY`, `WEEKLY`, `MONTHLY`) in `revenue_reports`.
+  - Emits `revenue_report_generated` and `revenue_report_insight_generated`.
+  - Exposes latest and historical report endpoints.
+- `revenue-intelligence`
+  - Computes conversion probability per conversation.
+  - Classifies customer states (`READY_TO_BUY`, `LOST_CUSTOMER`, `REACTIVATABLE`, `ACTIVE_CONVERSATION`).
+  - Persists `customer_revenue_state`.
+  - Emits customer-state domain events.
+  - Consumes `heatmap_insight_generated` and records operational insights.
+  - Exposes summary and customer listing metrics endpoints.
+- `followup-sequencer`
+  - Starts multi-step sequences from abandonment/reactivation/manual triggers.
+  - Schedules and sends follow-up messages by step delays.
+  - Cancels sequences on reply, closed conversation, or recovered sale.
+  - Exposes sequence stats endpoint for dashboard.
 
 ## 8) API surface (current)
 - `POST /api/v1/workspaces`
@@ -211,6 +457,7 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
 - `GET /api/v1/sessions/whatsapp/:sessionId/status`
 - `POST /api/v1/sessions/whatsapp/:sessionId/disconnect`
 - `GET /api/v1/conversations`
+- `GET /api/v1/conversations/metrics`
 - `GET /api/v1/conversations/:conversationId`
 - `POST /api/v1/recoveries/:recoveryId/mark-sale`
 - `POST /api/v1/campaigns/import`
@@ -218,11 +465,28 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
 - `GET /api/v1/sales-assistant/settings`
 - `PATCH /api/v1/sales-assistant/settings`
 - `GET /api/v1/sales-assistant/metrics`
+- `GET /api/v1/revenue-intelligence/summary`
+- `GET /api/v1/revenue-intelligence/customers`
+- `GET /api/v1/followup-sequencer/stats`
+- `GET /api/v1/deal-probability/summary`
+- `GET /api/v1/conversation-heatmap`
+- `GET /api/v1/playbook-engine/top`
+- `GET /api/v1/revenue-reports/latest`
+- `GET /api/v1/revenue-reports/history`
 
-## 9) Frontend routes (dashboard app)
+## 9) Frontend routes
 - Landing app (`apps/landing`):
   - `/`
-    - Public marketing page explaining product, problem/solution flow, metrics, and CTA to connect WhatsApp.
+    - Public marketing page with section architecture:
+      - `Navbar`
+      - `HeroSection`
+      - `ProblemSection`
+      - `SolutionSection`
+      - `ResultsSection`
+      - `ProductPreview`
+      - `HowItWorks`
+      - `CTASection`
+      - `Footer`
 - `/connect-whatsapp`
   - Onboarding flow: create workspace, start WhatsApp session, render scannable QR SVG, poll connected status.
 - `/dashboard`
@@ -238,6 +502,7 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
 - `DATABASE_URL`
 - `REDIS_URL`
 - `WHATSAPP_SESSION_DATA_PATH`
+- `ABANDONED_THRESHOLD_MINUTES`
 - `IDLE_THRESHOLD_HOURS`
 - `RECOVERY_TEMPLATE_TEXT`
 - `LOG_LEVEL`

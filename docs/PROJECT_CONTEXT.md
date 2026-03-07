@@ -7,6 +7,7 @@ Validate product value quickly by connecting WhatsApp, ingesting messages, detec
 Backend modular monolith (Node.js + TypeScript) using Baileys (`@whiskeysockets/baileys`) sessions plus two Next.js frontends:
 - `apps/landing` for public marketing
 - `apps/dashboard` for onboarding and operational tracking
+- `apps/landing` uses TailwindCSS with reusable SaaS landing sections.
 
 ## Current focus (Sprint 4)
 - MVP onboarding: workspace creation + WhatsApp connection via QR in dashboard.
@@ -15,6 +16,7 @@ Backend modular monolith (Node.js + TypeScript) using Baileys (`@whiskeysockets/
 - Incoming message ingestion.
 - Contact/conversation/message persistence.
 - Idle detector every 5 minutes.
+- Abandoned detector every 5 minutes for purchase-intent conversations.
 - Recovery attempt scheduling and automatic message sending.
 - Bulk campaign CSV import (`name,phone`) and campaign scheduling.
 - Sequential campaign message sending with randomized 5-10s pacing.
@@ -26,6 +28,14 @@ Backend modular monolith (Node.js + TypeScript) using Baileys (`@whiskeysockets/
 - Reply detection for sent recovery attempts.
 - Recovered sale marking with amount and currency.
 - Frontend visibility for recovered sales and conversations.
+- Revenue intelligence scoring and customer-state classification every 10 minutes.
+- Revenue summary and customer-state listing endpoints.
+- Smart follow-up sequencer with 4-step delayed automation and stop conditions.
+- Offer optimizer objection detection with recommendation events and conversion tracking.
+- Deal probability scoring engine with lead states and orchestration events.
+- Conversation heatmap stage analytics with drop-off metrics and insight generation.
+- Conversation playbook engine with high-performing strategy detection and recommendations.
+- Auto revenue reports with daily/weekly/monthly business performance summaries.
 
 ## Architecture summary
 - API + session runtime in one service.
@@ -42,6 +52,17 @@ Backend modular monolith (Node.js + TypeScript) using Baileys (`@whiskeysockets/
 - Campaign worker sends one scheduled campaign message at a time and waits 5-10 seconds before the next send.
 - Sales assistant executes in-process on `message_received` pipeline and can use OpenAI API with fallback templates.
 - Sales assistant API surface includes settings management and dashboard counters by workspace.
+- Abandoned detector marks `purchase_intent` and `abandoned` states and emits `conversation_abandoned`.
+- Conversation metrics endpoint exposes abandonment recovery counters.
+- Revenue intelligence module computes conversion probability and publishes customer-state events.
+- Follow-up sequencer starts from abandonment/reactivation/manual triggers and sends delayed steps.
+- Offer optimizer detects objections from inbound text and emits `offer_recommended` for sales-assistant responses.
+- Deal probability engine computes 0-1 purchase score and emits lead-state events for assistant, offer optimizer, and follow-up flows.
+- Conversation heatmap worker computes stage-level drop-off analytics every 30 minutes and emits `heatmap_insight_generated`.
+- Revenue-intelligence consumes `heatmap_insight_generated` and records high drop-off insights in `domain_event_logs`.
+- Playbook engine worker computes conversion rates by response strategy every 1 hour and emits `playbook_high_performance`.
+- Sales assistant consumes `playbook_high_performance` and prioritizes high-performing playbooks.
+- Revenue reports worker computes period revenue metrics every 24 hours and emits report + insight events.
 
 ## Main entities (active now)
 - `workspaces`
@@ -57,10 +78,31 @@ Backend modular monolith (Node.js + TypeScript) using Baileys (`@whiskeysockets/
 - `campaign_messages`
 - `workspace_settings`
 - `chatbot_logs`
+- `customer_revenue_state`
+- `followup_sequences`
+- `followup_sequence_steps`
+- `offer_events`
+- `deal_probability`
+- `conversation_stage_metrics`
+- `conversation_playbooks`
+- `revenue_reports`
 
 ## Backlog events preserved
 - `message_received`
+- `offer_recommended`
 - `conversation_idle`
+- `conversation_abandoned`
+- `manual_followup_trigger`
+- `customer_ready_to_buy`
+- `customer_lost`
+- `customer_reactivatable`
+- `customer_ready_to_close`
+- `customer_warm_lead`
+- `customer_cold_lead`
+- `heatmap_insight_generated`
+- `playbook_high_performance`
+- `revenue_report_generated`
+- `revenue_report_insight_generated`
 - `recovery_triggered`
 - `recovery_sent`
 - `recovery_failed`
@@ -75,6 +117,15 @@ Backend modular monolith (Node.js + TypeScript) using Baileys (`@whiskeysockets/
 
 ## Frontend routes
 - `/` (landing marketing page)
+  - `Navbar`
+  - `HeroSection`
+  - `ProblemSection`
+  - `SolutionSection`
+  - `ResultsSection`
+  - `ProductPreview`
+  - `HowItWorks`
+  - `CTASection`
+  - `Footer`
 - `/connect-whatsapp`
 - `/dashboard`
 - `/conversations`

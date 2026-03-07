@@ -1,19 +1,27 @@
 import { CTASection } from "@/components/cta-section";
-import { Hero } from "@/components/hero";
-import { MetricsSection } from "@/components/metrics-section";
+import { Footer } from "@/components/footer";
+import { HeroSection } from "@/components/hero";
+import { HowItWorks } from "@/components/steps-section";
+import { Navbar } from "@/components/navbar";
 import { ProblemSection } from "@/components/problem-section";
+import { ProductPreview } from "@/components/product-preview";
+import { ResultsSection } from "@/components/metrics-section";
 import { SolutionSection } from "@/components/solution-section";
-import { StepsSection } from "@/components/steps-section";
 
 export default function LandingPage(): JSX.Element {
   return (
-    <main className="landing">
-      <Hero />
-      <ProblemSection />
-      <SolutionSection />
-      <MetricsSection />
-      <StepsSection />
-      <CTASection />
-    </main>
+    <div className="relative min-h-screen bg-background text-foreground">
+      <Navbar />
+      <main>
+        <HeroSection />
+        <ProblemSection />
+        <SolutionSection />
+        <ResultsSection />
+        <ProductPreview />
+        <HowItWorks />
+        <CTASection />
+      </main>
+      <Footer />
+    </div>
   );
 }

@@ -12,14 +12,14 @@ type RootLayoutProps = {
 };
 
 export const metadata = {
-  title: "RecuperaVentas",
-  description: "Recupera ventas perdidas de WhatsApp con seguimiento automatico."
+  title: "RecuperaVentas - Recupera ventas perdidas en WhatsApp",
+  description: "Recupera ventas perdidas de WhatsApp con seguimiento automático."
 };
 
 export default function RootLayout({ children }: RootLayoutProps): JSX.Element {
   return (
     <html lang="es">
-      <body className={sora.variable}>{children}</body>
+      <body className={`${sora.variable} antialiased`}>{children}</body>
     </html>
   );
 }
