@@ -4,60 +4,60 @@ export function HeroSection(): JSX.Element {
   return (
     <section
       id="hero"
-      className="relative flex min-h-screen items-center overflow-hidden px-4 pb-20 pt-36 sm:px-6"
+      className="relative flex min-h-screen items-center overflow-hidden px-4 pb-14 pt-28 sm:px-6 sm:pb-20 sm:pt-32 lg:pt-36"
       aria-label="Hero de recuperacion de ventas"
     >
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-purple-900/20 via-transparent to-blue-900/20" />
 
       <div className="container relative z-10">
-        <div className="grid items-center gap-14 lg:grid-cols-2">
-          <div className="space-y-9">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.06] px-4 py-2 backdrop-blur-sm shadow-[0_8px_24px_rgba(2,6,23,0.28)]">
+        <div className="grid items-center gap-10 md:gap-12 lg:grid-cols-2 lg:gap-14">
+          <div className="space-y-6 sm:space-y-8">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.06] px-3 py-1.5 backdrop-blur-sm shadow-[0_8px_24px_rgba(2,6,23,0.28)] sm:px-4 sm:py-2">
               <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
-              <span className="text-sm text-foreground/80">Automatizacion inteligente de ventas</span>
+              <span className="text-xs text-foreground/80 sm:text-sm">Automatizacion inteligente de ventas</span>
             </div>
 
-            <h1 className="bg-gradient-to-r from-white via-white to-white/60 bg-clip-text text-5xl font-bold leading-[1.05] text-transparent md:text-7xl">
+            <h1 className="bg-gradient-to-r from-white via-white to-white/60 bg-clip-text text-3xl font-bold leading-[1.08] text-transparent sm:text-4xl md:text-6xl lg:text-7xl">
               Recupera ventas perdidas en WhatsApp automaticamente.
             </h1>
 
-            <p className="max-w-2xl text-xl leading-relaxed text-foreground/70 md:text-2xl">
+            <p className="max-w-2xl text-base leading-relaxed text-foreground/70 sm:text-lg md:text-xl">
               Clientes preguntan, desaparecen y nunca vuelven.
               <br />
               RecuperaVentas los trae de vuelta y cierra la venta por ti.
             </p>
 
-            <div className="flex flex-col gap-4 pt-1 sm:flex-row">
-              <button className="ui-btn-primary">
+            <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:gap-4">
+              <button className="ui-btn-primary w-full sm:w-auto">
                 <MessageCircle className="h-5 w-5" />
                 Conectar mi WhatsApp
               </button>
-              <button className="ui-btn-secondary">
+              <button className="ui-btn-secondary w-full sm:w-auto">
                 <Play className="h-5 w-5" />
                 Ver demo
               </button>
             </div>
 
-            <div className="flex flex-wrap items-center gap-7 pt-4">
-              <div>
-                <div className="text-3xl font-bold text-white">+27%</div>
+            <div className="grid gap-4 pt-2 sm:flex sm:flex-wrap sm:items-center sm:gap-7 sm:pt-4">
+              <div className="flex items-baseline gap-2 sm:block">
+                <div className="text-2xl font-bold text-white sm:text-3xl">+27%</div>
                 <div className="text-sm text-foreground/60">mas clientes</div>
               </div>
-              <div className="h-12 w-px bg-gradient-to-b from-transparent via-white/20 to-transparent" />
-              <div>
-                <div className="text-3xl font-bold text-white">+19%</div>
+              <div className="hidden h-12 w-px bg-gradient-to-b from-transparent via-white/20 to-transparent sm:block" />
+              <div className="flex items-baseline gap-2 sm:block">
+                <div className="text-2xl font-bold text-white sm:text-3xl">+19%</div>
                 <div className="text-sm text-foreground/60">mas ventas</div>
               </div>
-              <div className="h-12 w-px bg-gradient-to-b from-transparent via-white/20 to-transparent" />
-              <div>
-                <div className="text-3xl font-bold text-white">24/7</div>
+              <div className="hidden h-12 w-px bg-gradient-to-b from-transparent via-white/20 to-transparent sm:block" />
+              <div className="flex items-baseline gap-2 sm:block">
+                <div className="text-2xl font-bold text-white sm:text-3xl">24/7</div>
                 <div className="text-sm text-foreground/60">automatizado</div>
               </div>
             </div>
           </div>
 
-          <div className="relative">
-            <div className="ui-card relative overflow-hidden border-white/20 bg-gradient-to-br from-white/10 to-white/[0.03] p-8 backdrop-blur-xl">
+          <div className="relative hidden md:block">
+            <div className="ui-card relative overflow-hidden border-white/20 bg-gradient-to-br from-white/10 to-white/[0.03] p-5 backdrop-blur-xl sm:p-8">
               <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/[0.04] via-transparent to-transparent" />
 
               <div className="relative flex items-center gap-3 border-b border-white/10 pb-6">

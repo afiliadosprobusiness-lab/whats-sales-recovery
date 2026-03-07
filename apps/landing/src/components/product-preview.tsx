@@ -9,20 +9,37 @@ const recoveries = [
 
 export function ProductPreview(): JSX.Element {
   return (
-    <section id="product-preview" className="relative overflow-hidden px-4 py-32 sm:px-6">
+    <section id="product-preview" className="relative overflow-hidden px-4 py-20 sm:px-6 sm:py-24 lg:py-32">
       <div className="container relative z-10">
-        <div className="mb-20 text-center">
-          <h2 className="mb-6 text-4xl font-bold md:text-6xl">
+        <div className="mb-12 text-center sm:mb-16 lg:mb-20">
+          <h2 className="mb-4 text-3xl font-bold sm:mb-6 sm:text-4xl md:text-5xl lg:text-6xl">
             <span className="bg-gradient-to-r from-purple-400 via-blue-400 to-purple-400 bg-clip-text text-transparent">
               Dashboard inteligente
             </span>
           </h2>
-          <p className="mx-auto max-w-3xl text-xl leading-relaxed text-foreground/60">
+          <p className="mx-auto max-w-3xl text-base leading-relaxed text-foreground/60 sm:text-lg md:text-xl">
             Visualiza y controla todas tus conversaciones recuperadas en tiempo real
           </p>
         </div>
 
-        <div className="relative mx-auto max-w-6xl">
+        <div className="mx-auto max-w-md md:hidden">
+          <div className="ui-card rounded-2xl border-white/15 bg-gradient-to-br from-white/[0.06] to-white/[0.02] p-6 text-left">
+            <div className="mb-3 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500 to-blue-600 shadow-md shadow-purple-500/40">
+                <BarChart3 className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-white">Vista demo</h3>
+                <p className="text-sm text-foreground/60">Disponible en pantallas medianas y grandes</p>
+              </div>
+            </div>
+            <p className="text-sm leading-relaxed text-foreground/70">
+              En movil priorizamos velocidad y legibilidad para mantener el foco en la conversion.
+            </p>
+          </div>
+        </div>
+
+        <div className="relative mx-auto hidden max-w-6xl md:block">
           <div className="rounded-3xl bg-gradient-to-br from-purple-500/20 via-indigo-500/10 to-blue-500/20 p-[1px] shadow-[0_20px_45px_rgba(2,6,23,0.45)]">
             <div className="rounded-3xl border border-white/10 bg-background/95 p-8 backdrop-blur-xl">
               <div className="mb-8 flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-6">

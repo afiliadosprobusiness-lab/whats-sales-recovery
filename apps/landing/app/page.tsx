@@ -10,9 +10,9 @@ import { SolutionSection } from "@/components/solution-section";
 
 export default function LandingPage(): JSX.Element {
   return (
-    <div className="relative min-h-screen bg-background text-foreground">
+    <div className="relative min-h-screen overflow-x-clip bg-background text-foreground">
       <Navbar />
-      <main>
+      <main className="overflow-x-clip">
         <HeroSection />
         <ProblemSection />
         <SolutionSection />
