@@ -1,6 +1,7 @@
 import { MetricCard } from "@/components/metric-card";
 import { requireAuthenticatedUser } from "@/lib/auth-session";
 import { getDashboardMetrics } from "@/lib/saas-data";
+import { AutomationsStatusCard } from "./automations-status-card";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +41,8 @@ export default async function DashboardPage(): Promise<JSX.Element> {
           demo insights with live workspace signals.
         </p>
       </article>
+
+      <AutomationsStatusCard />
     </section>
   );
 }

@@ -78,6 +78,34 @@ export type DashboardMetrics = {
   recoveredRevenue: number;
 };
 
+export type AutomationSettings = {
+  quickRecoveryWebhook: string;
+  followupRecoveryWebhook: string;
+  finalRecoveryWebhook: string;
+};
+
+export type AutomationPlaybookName = "sales_recovery";
+
+export type AutomationPlaybook = {
+  playbook: AutomationPlaybookName;
+  enabled: boolean;
+};
+
+type AutomationSettingsApiData = {
+  workspace_id: string;
+  quick_recovery_webhook: string | null;
+  followup_recovery_webhook: string | null;
+  final_recovery_webhook: string | null;
+};
+
+type AutomationPlaybooksApiData = {
+  items: Array<{
+    playbook: AutomationPlaybookName;
+    enabled: boolean;
+  }>;
+  running: AutomationPlaybookName[];
+};
+
 function isConfigured(): boolean {
   return Boolean(API_BASE_URL && WORKSPACE_ID);
 }
@@ -109,6 +137,21 @@ function getOnboardingErrorMessage(payload: unknown, fallback: string): string {
   }
 
   return fallback;
+}
+
+function mapAutomationSettings(
+  data: AutomationSettingsApiData
+): AutomationSettings {
+  return {
+    quickRecoveryWebhook: data.quick_recovery_webhook ?? "",
+    followupRecoveryWebhook: data.followup_recovery_webhook ?? "",
+    finalRecoveryWebhook: data.final_recovery_webhook ?? ""
+  };
+}
+
+function normalizeWebhookInput(value: string): string | null {
+  const normalized = value.trim();
+  return normalized ? normalized : null;
 }
 
 export async function getConversations(): Promise<ConversationItem[]> {
@@ -196,6 +239,86 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
     recoveryMessagesSent,
     recoveredSales,
     recoveredRevenue
+  };
+}
+
+export async function getAutomationSettings(input: {
+  workspaceId: string;
+}): Promise<AutomationSettings> {
+  const query = new URLSearchParams({
+    workspaceId: input.workspaceId
+  });
+
+  const data = await fetchApi<AutomationSettingsApiData>(
+    `/settings/automations?${query.toString()}`
+  );
+
+  return mapAutomationSettings(data);
+}
+
+export async function saveAutomationSettings(input: {
+  workspaceId: string;
+  quickRecoveryWebhook: string;
+  followupRecoveryWebhook: string;
+  finalRecoveryWebhook: string;
+}): Promise<AutomationSettings> {
+  const query = new URLSearchParams({
+    workspaceId: input.workspaceId
+  });
+
+  const data = await fetchApi<AutomationSettingsApiData>(
+    `/settings/automations?${query.toString()}`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        quick_recovery_webhook: normalizeWebhookInput(input.quickRecoveryWebhook),
+        followup_recovery_webhook: normalizeWebhookInput(
+          input.followupRecoveryWebhook
+        ),
+        final_recovery_webhook: normalizeWebhookInput(input.finalRecoveryWebhook)
+      })
+    }
+  );
+
+  return mapAutomationSettings(data);
+}
+
+export async function getAutomationPlaybooks(input: {
+  workspaceId: string;
+}): Promise<AutomationPlaybooksApiData> {
+  const query = new URLSearchParams({
+    workspaceId: input.workspaceId
+  });
+
+  return fetchApi<AutomationPlaybooksApiData>(
+    `/automations/playbooks?${query.toString()}`
+  );
+}
+
+export async function setAutomationPlaybook(input: {
+  workspaceId: string;
+  playbook: AutomationPlaybookName;
+  enabled: boolean;
+}): Promise<AutomationPlaybook> {
+  const query = new URLSearchParams({
+    workspaceId: input.workspaceId
+  });
+
+  const data = await fetchApi<{
+    workspace_id: string;
+    playbook: AutomationPlaybookName;
+    enabled: boolean;
+  }>(`/automations/playbooks?${query.toString()}`, {
+    method: "POST",
+    body: JSON.stringify({
+      playbook: input.playbook,
+      enabled: input.enabled
+    })
+  });
+
+  return {
+    playbook: data.playbook,
+    enabled: data.enabled
   };
 }
 

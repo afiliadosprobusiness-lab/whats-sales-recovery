@@ -41,6 +41,9 @@ Backend modular monolith (Node.js + TypeScript) using Baileys (`@whiskeysockets/
 - Conversation heatmap stage analytics with drop-off metrics and insight generation.
 - Conversation playbook engine with high-performing strategy detection and recommendations.
 - Auto revenue reports with daily/weekly/monthly business performance summaries.
+- Workspace automation settings for configurable n8n webhook endpoints.
+- Async n8n webhook triggers on inbound lead interactions (quick/follow-up/final recovery).
+- Playbook-based automation controls in dashboard (`sales_recovery` enable/disable).
 
 ## Architecture summary
 - API + session runtime in one service.
@@ -74,6 +77,9 @@ Backend modular monolith (Node.js + TypeScript) using Baileys (`@whiskeysockets/
 - Playbook engine worker computes conversion rates by response strategy every 1 hour and emits `playbook_high_performance`.
 - Sales assistant consumes `playbook_high_performance` and prioritizes high-performing playbooks.
 - Revenue reports worker computes period revenue metrics every 24 hours and emits report + insight events.
+- Settings API exposes workspace-level n8n webhook configuration through `/settings/automations`.
+- n8n webhook dispatch is async/non-blocking and logs failures without breaking ingestion flow.
+- Automation playbook API controls webhook execution through `/automations/playbooks`.
 
 ## Main entities (active now)
 - `workspaces`
@@ -97,6 +103,8 @@ Backend modular monolith (Node.js + TypeScript) using Baileys (`@whiskeysockets/
 - `conversation_stage_metrics`
 - `conversation_playbooks`
 - `revenue_reports`
+- `automation_settings`
+- `automation_playbooks`
 
 ## Backlog events preserved
 - `message_received`
@@ -148,5 +156,8 @@ Backend modular monolith (Node.js + TypeScript) using Baileys (`@whiskeysockets/
   - `/conversations`
   - `/conversations/:id`
   - `/recovery`
+  - `/automations`
+    - Enable/disable automation playbooks and monitor running automations.
   - `/analytics`
   - `/settings`
+    - Advanced settings only (webhook URLs hidden from normal users).

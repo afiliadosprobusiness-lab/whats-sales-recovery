@@ -39,6 +39,8 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
 - CampaignContact: per-contact delivery/reply status for campaign.
 - CampaignMessage: outbound attempt linked to campaign contact.
 - WorkspaceSettings: workspace-level chatbot configuration and sales style.
+- AutomationSettings: workspace-level n8n webhook endpoints.
+- AutomationPlaybook: workspace-level enablement state for automation bundles.
 - ChatbotLog: assistant customer/bot exchange log for audit and metrics.
 - OfferEvent: objection detection and optimized offer recommendation record.
 - DealProbability: conversation-level purchase probability score and lead state.
@@ -110,6 +112,12 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
 ### Sprint 12 operational tables
 - `revenue_reports`
 
+### Sprint 13 operational tables
+- `automation_settings`
+
+### Sprint 14 operational tables
+- `automation_playbooks`
+
 ### Future sprint tables (already scaffolded)
 - `templates`
 
@@ -121,7 +129,7 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
 3. Register flow (`/register`) stores user with bcrypt-hashed password and returns JWT.
 4. Login flow (`/login`) validates bcrypt password hash and returns JWT.
 5. JWT is persisted in an `httpOnly` cookie for protected dashboard routes.
-6. Authenticated users can access `/dashboard`, `/connect-whatsapp`, `/conversations`, `/recovery`, `/analytics`, and `/settings`.
+6. Authenticated users can access `/dashboard`, `/connect-whatsapp`, `/conversations`, `/recovery`, `/automations`, `/analytics`, and `/settings`.
 7. Landing CTA (`Connect my WhatsApp`) routes to dashboard entry so redirect logic decides:
    - guest -> `/register`
    - authenticated user -> `/connect-whatsapp`
@@ -351,6 +359,18 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
 7. Worker emits `revenue_report_generated`.
 8. If insight conditions are met (for example recovered revenue > 20% of total), worker emits `revenue_report_insight_generated`.
 
+### Flow P: Workspace n8n automation webhooks on lead interaction
+1. Workspace user enables/disables playbooks via `Dashboard -> Automations`.
+2. Dashboard toggles playbook status through `POST /automations/playbooks?workspaceId={uuid}`.
+3. On each inbound lead interaction (`message_received`), conversation module builds normalized lead payload.
+4. n8n automation service loads `sales_recovery` playbook status from `automation_playbooks`.
+5. If playbook is enabled, service dispatches async POST requests to:
+   - quick recovery (2h)
+   - follow-up recovery (12h)
+   - final recovery (48h)
+6. If playbook is disabled, webhook dispatch is skipped.
+7. Webhook errors are logged and never break the main ingestion flow.
+
 ## 6) Runtime architecture
 - Modular monolith (single backend service).
 - Separate frontend apps built with Next.js + TypeScript:
@@ -381,6 +401,7 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
 - Revenue reports worker runs every 24 hours to persist daily/weekly/monthly revenue reports and insights.
 - Campaign sender worker runs continuously and enforces 5-10s delay between campaign sends.
 - Sales assistant uses in-process immediate handling on inbound events with 2-4s response pacing.
+- n8n automation webhooks run asynchronously on inbound lead interactions, gated by playbook enablement, and do not block conversation processing.
 - In-memory event bus for intra-process domain events.
 - Express API includes CORS allowlist for:
   - `https://recuperaventas-dashboard.vercel.app`
@@ -422,6 +443,17 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
   - Persists chatbot interactions and dashboard counters.
   - Consumes `customer_ready_to_buy` to send proactive closing messages.
   - Consumes `offer_recommended` to send objection-aware optimized offers.
+- `automation-settings`
+  - Stores workspace-level n8n webhook endpoints.
+  - Exposes get/update use cases for dashboard configuration.
+- `automation-playbooks`
+  - Stores workspace-level playbook enablement (`sales_recovery`).
+  - Exposes list/toggle use cases for dashboard automation cards.
+- `n8n-automations`
+  - Loads workspace automation webhooks from `automation_settings`.
+  - Checks playbook state from `automation_playbooks` before dispatching webhooks.
+  - Triggers quick/follow-up/final webhook calls on inbound lead interactions.
+  - Handles webhook failures with non-blocking logging.
 - `offer-optimizer`
   - Detects objection keywords from inbound customer messages.
   - Maps objection categories to offer strategies (discount, urgency, bonus, delivery incentive, reservation).
@@ -487,6 +519,11 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
 - `GET /api/v1/playbook-engine/top`
 - `GET /api/v1/revenue-reports/latest`
 - `GET /api/v1/revenue-reports/history`
+- `GET /api/v1/settings/automations`
+- `POST /api/v1/settings/automations`
+- `GET /api/v1/automations/playbooks`
+- `POST /api/v1/automations/playbooks`
+- `POST /api/automations/playbooks` (compatibility alias)
 
 ## 9) Frontend routes
 - Landing app (`apps/landing`):
@@ -518,10 +555,12 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
     - CRM layout with conversation list, chat window, and customer info panel.
   - `/recovery`
     - Abandoned/reactivatable/ready-to-close lead queues.
+  - `/automations`
+    - Playbook cards with enable/disable toggles and running automation status.
   - `/analytics`
     - Recovered revenue, follow-up performance, and conversion chart placeholders.
   - `/settings`
-    - SaaS settings scaffold route.
+    - Advanced settings route; webhook infrastructure remains hidden from normal users.
   - `/conversations/:id`
     - Message timeline, latest recovery status, action `Mark sale recovered`.
 

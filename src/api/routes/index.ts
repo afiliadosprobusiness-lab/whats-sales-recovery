@@ -5,6 +5,14 @@ import { recoveryRoutes } from "./recovery.routes";
 import { onboardingRoutes } from "./onboarding.routes";
 import { campaignRoutes } from "./campaign.routes";
 import { salesAssistantRoutes } from "./sales-assistant.routes";
+import { revenueIntelligenceRoutes } from "./revenue-intelligence.routes";
+import { followupSequencerRoutes } from "./followup-sequencer.routes";
+import { dealProbabilityRoutes } from "./deal-probability.routes";
+import { conversationHeatmapRoutes } from "./conversation-heatmap.routes";
+import { playbookEngineRoutes } from "./playbook-engine.routes";
+import { revenueReportsRoutes } from "./revenue-reports.routes";
+import { settingsRoutes } from "./settings.routes";
+import { automationPlaybooksRoutes } from "./automation-playbooks.routes";
 
 export const apiRoutes = Router();
 
@@ -14,3 +22,11 @@ apiRoutes.use("/conversations", conversationRoutes);
 apiRoutes.use("/recoveries", recoveryRoutes);
 apiRoutes.use("/campaigns", campaignRoutes);
 apiRoutes.use("/sales-assistant", salesAssistantRoutes);
+apiRoutes.use("/revenue-intelligence", revenueIntelligenceRoutes);
+apiRoutes.use("/followup-sequencer", followupSequencerRoutes);
+apiRoutes.use("/deal-probability", dealProbabilityRoutes);
+apiRoutes.use("/conversation-heatmap", conversationHeatmapRoutes);
+apiRoutes.use("/playbook-engine", playbookEngineRoutes);
+apiRoutes.use("/revenue-reports", revenueReportsRoutes);
+apiRoutes.use("/settings", settingsRoutes);
+apiRoutes.use("/automations", automationPlaybooksRoutes);

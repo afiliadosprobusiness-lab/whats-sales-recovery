@@ -2,6 +2,7 @@ import express, { type Express } from "express";
 import cors, { type CorsOptions } from "cors";
 import pinoHttp from "pino-http";
 import { apiRoutes } from "./api/routes";
+import { automationPlaybooksRoutes } from "./api/routes/automation-playbooks.routes";
 import { logger } from "./utils/logger";
 
 const corsOptions: CorsOptions = {
@@ -26,6 +27,7 @@ export function createServer(): Express {
     res.status(200).json({ ok: true });
   });
 
+  app.use("/api/automations", automationPlaybooksRoutes);
   app.use("/api/v1", apiRoutes);
 
   return app;

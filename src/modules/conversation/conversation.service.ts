@@ -4,13 +4,20 @@ import {
 } from "../../events/domain/domain-events";
 import { eventBus } from "../../events/event-bus";
 import { logger } from "../../utils/logger";
+import { AbandonedDetectorService } from "../abandoned-detector/abandoned-detector.service";
 import { RecoveryService } from "../recovery/recovery.service";
+import {
+  type N8nAutomationLead,
+  N8nAutomationsService
+} from "../../services/n8n-automations";
 import { ConversationRepository } from "./conversation.repository";
 
 export class ConversationService {
   constructor(
     private readonly repository: ConversationRepository,
-    private readonly recoveryService: RecoveryService
+    private readonly recoveryService: RecoveryService,
+    private readonly abandonedDetectorService: AbandonedDetectorService,
+    private readonly n8nAutomationsService: N8nAutomationsService
   ) {}
 
   registerEventHandlers(): void {
@@ -72,10 +79,29 @@ export class ConversationService {
     );
 
     if (payload.direction === "inbound") {
+      await this.abandonedDetectorService.clearAbandonmentOnInboundMessage({
+        workspaceId: event.workspaceId,
+        conversationId: conversation.id
+      });
+      await this.abandonedDetectorService.evaluatePurchaseIntent({
+        workspaceId: event.workspaceId,
+        conversationId: conversation.id,
+        bodyText: payload.bodyText
+      });
       await this.recoveryService.handleInboundMessageForReply({
         workspaceId: event.workspaceId,
         conversationId: conversation.id,
         providerMessageId: payload.providerMessageId
+      });
+
+      this.triggerRecoveryAutomations({
+        workspaceId: event.workspaceId,
+        conversationId: conversation.id,
+        name: contact.displayName ?? payload.contactName ?? payload.contactPhone,
+        phone: contact.phoneE164,
+        lastMessage: payload.bodyText,
+        lastMessageTime: payload.occurredAt,
+        status: "open"
       });
     }
 
@@ -86,6 +112,10 @@ export class ConversationService {
       conversation.id,
       payload
     );
+  }
+
+  private triggerRecoveryAutomations(lead: N8nAutomationLead): void {
+    void this.n8nAutomationsService.triggerSalesRecoveryPlaybook(lead);
   }
 
   async listConversations(input: {

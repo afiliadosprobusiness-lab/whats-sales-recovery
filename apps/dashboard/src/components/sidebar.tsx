@@ -7,6 +7,7 @@ const navigationItems: Array<{ href: string; label: string }> = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/conversations", label: "Conversations" },
   { href: "/recovery", label: "Recovery" },
+  { href: "/automations", label: "Automations" },
   { href: "/analytics", label: "Analytics" },
   { href: "/settings", label: "Settings" }
 ];
