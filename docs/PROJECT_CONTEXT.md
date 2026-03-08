@@ -17,6 +17,7 @@ Backend modular monolith (Node.js + TypeScript) using Baileys (`@whiskeysockets/
   - authenticated user -> `/connect-whatsapp`
 - MVP onboarding: workspace creation + WhatsApp connection via QR in dashboard.
 - Dashboard connect screen uses `qrcode.react` to render scannable WhatsApp QR images.
+- Dashboard sidebar includes a visible `Connect WhatsApp` entry and a small workspace connection indicator (`Connected`/`Not connected`).
 - WhatsApp session connection and restore with workspace-level in-memory socket reuse.
 - Incoming message ingestion.
 - Contact/conversation/message persistence.
@@ -80,10 +81,11 @@ Backend modular monolith (Node.js + TypeScript) using Baileys (`@whiskeysockets/
 - Sales assistant consumes `playbook_high_performance` and prioritizes high-performing playbooks.
 - Revenue reports worker computes period revenue metrics every 24 hours and emits report + insight events.
 - Settings API exposes workspace-level n8n webhook configuration through `/settings/automations`.
-- Settings API exposes AI chatbot webhook configuration through `/settings/ai-chatbot` (alias: `/api/settings/ai-chatbot`).
+- Settings API exposes AI chatbot webhook configuration through `/settings/ai-chatbot` (dashboard uses `/api/settings/ai-chatbot` compatibility alias).
 - n8n webhook dispatch is async/non-blocking and logs failures without breaking ingestion flow.
 - AI chatbot webhook dispatch is async/non-blocking and logs failures without breaking ingestion flow.
 - Automation playbook API controls webhook execution through `/automations/playbooks`.
+- API not-found/unhandled failures under `/api/*` are normalized to JSON error envelopes.
 
 ## Main entities (active now)
 - `workspaces`
@@ -157,6 +159,7 @@ Backend modular monolith (Node.js + TypeScript) using Baileys (`@whiskeysockets/
   - `/login`
   - `/dashboard`
   - `/connect-whatsapp`
+    - Existing onboarding flow with QR scan, status labels (`Disconnected`, `Waiting for QR scan`, `Connected`), and reconnect action.
   - `/conversations`
   - `/conversations/:id`
   - `/recovery`

@@ -1,5 +1,6 @@
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3000/api/v1";
+const API_BASE_ORIGIN = getApiBaseOrigin(API_BASE_URL);
 const WORKSPACE_ID = process.env.NEXT_PUBLIC_WORKSPACE_ID ?? "";
 const WORKSPACE_STORAGE_KEY = "recuperaventas_workspace_id";
 
@@ -119,22 +120,75 @@ function isConfigured(): boolean {
   return Boolean(API_BASE_URL && WORKSPACE_ID);
 }
 
-async function fetchApi<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+function getApiBaseOrigin(apiBaseUrl: string): string {
+  try {
+    return new URL(apiBaseUrl).origin;
+  } catch {
+    return "";
+  }
+}
+
+function resolveAliasApiUrl(path: string): string {
+  if (!API_BASE_ORIGIN) {
+    return path;
+  }
+
+  return `${API_BASE_ORIGIN}${path}`;
+}
+
+function safeParseJson<T>(text: string): T | null {
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
+}
+
+function formatNonJsonResponseError(
+  path: string,
+  response: Response,
+  payloadText: string
+): string {
+  const compact = payloadText.replace(/\s+/g, " ").trim();
+  const preview = compact ? ` Response preview: ${compact.slice(0, 120)}.` : "";
+  const isLikelyHtml = /^\s*</.test(payloadText);
+  const detail = isLikelyHtml
+    ? "Received HTML instead of JSON. Check API path/auth redirect/base URL."
+    : "Received a non-JSON response from the API.";
+
+  return `${detail} (${response.status} ${response.statusText}) for ${path}.${preview}`;
+}
+
+async function fetchApiByUrl<T>(
+  url: string,
+  path: string,
+  init?: RequestInit
+): Promise<T> {
+  const response = await fetch(url, {
     ...init,
     headers: {
+      Accept: "application/json",
       "Content-Type": "application/json",
       ...(init?.headers ?? {})
     },
     cache: "no-store"
   });
 
-  const payload = (await response.json()) as ApiResponse<T>;
+  const payloadText = await response.text();
+  const payload = safeParseJson<ApiResponse<T>>(payloadText);
+  if (!payload) {
+    throw new Error(formatNonJsonResponseError(path, response, payloadText));
+  }
+
   if (!response.ok || payload.error || !payload.data) {
     throw new Error(payload.error?.message ?? `API request failed: ${path}`);
   }
 
   return payload.data;
+}
+
+async function fetchApi<T>(path: string, init?: RequestInit): Promise<T> {
+  return fetchApiByUrl(`${API_BASE_URL}${path}`, path, init);
 }
 
 function getOnboardingErrorMessage(payload: unknown, fallback: string): string {
@@ -307,8 +361,10 @@ export async function getAiChatbotSettings(input: {
     workspaceId: input.workspaceId
   });
 
-  const data = await fetchApi<AiChatbotSettingsApiData>(
-    `/settings/ai-chatbot?${query.toString()}`
+  const path = `/api/settings/ai-chatbot?${query.toString()}`;
+  const data = await fetchApiByUrl<AiChatbotSettingsApiData>(
+    resolveAliasApiUrl(path),
+    path
   );
 
   return mapAiChatbotSettings(data);
@@ -322,8 +378,10 @@ export async function saveAiChatbotSettings(input: {
     workspaceId: input.workspaceId
   });
 
-  const data = await fetchApi<AiChatbotSettingsApiData>(
-    `/settings/ai-chatbot?${query.toString()}`,
+  const path = `/api/settings/ai-chatbot?${query.toString()}`;
+  const data = await fetchApiByUrl<AiChatbotSettingsApiData>(
+    resolveAliasApiUrl(path),
+    path,
     {
       method: "POST",
       body: JSON.stringify({

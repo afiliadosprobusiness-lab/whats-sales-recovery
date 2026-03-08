@@ -373,7 +373,7 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
 
 ### Flow Q: Workspace AI chatbot webhook forwarding on inbound messages
 1. Workspace user configures AI Router Webhook URL in `Dashboard -> Settings -> AI Chatbot`.
-2. Dashboard persists value via `POST /settings/ai-chatbot?workspaceId={uuid}`.
+2. Dashboard reads/persists value via `GET/POST /api/settings/ai-chatbot?workspaceId={uuid}`.
 3. On each inbound lead interaction (`message_received`), conversation module builds chatbot payload:
    - `workspace_id`
    - `phone`
@@ -397,6 +397,7 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
   - Dashboard authentication is handled by Next.js route handlers (`/api/auth/register`, `/api/auth/login`, `/api/auth/logout`) with JWT + `httpOnly` cookie session.
   - User credentials are stored in JSON persistence for MVP (`apps/dashboard/.data/users.json` in local dev, `/tmp/recuperaventas-dashboard/users.json` in production serverless by default) with bcrypt hashing.
   - Dashboard onboarding UI renders WhatsApp QR as SVG using `qrcode.react` for scanner compatibility.
+  - Dashboard sidebar exposes a direct `Connect WhatsApp` navigation entry and shows workspace connection indicator (`Connected` / `Not connected`).
 - In-process WhatsApp session sockets (`@whiskeysockets/baileys`).
   - Session auth state is persisted under `sessions/{workspace_id}` using `useMultiFileAuthState`.
   - Socket startup fetches latest WhatsApp Web protocol version via `fetchLatestBaileysVersion` and passes it to `makeWASocket`.
@@ -424,6 +425,7 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
   - `https://recuperaventas-dashboard.vercel.app`
   - `https://recuperaventas-landing.vercel.app`
   - `http://localhost:3000`
+- API-level not-found and unhandled failures under `/api/*` return JSON envelopes (`{ data: null, error }`) to avoid HTML error pages in clients.
 
 ## 7) Modules and responsibilities
 - `whatsapp-session`
@@ -575,6 +577,7 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
   - `/dashboard`
     - SaaS metrics cards (placeholder integrations).
   - `/connect-whatsapp`
+    - Shows QR area, explicit connection status (`Disconnected`, `Waiting for QR scan`, `Connected`), and reconnect CTA.
     - Workspace creation + WhatsApp QR connection flow.
   - `/conversations`
     - CRM layout with conversation list, chat window, and customer info panel.

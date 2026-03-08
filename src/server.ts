@@ -1,4 +1,9 @@
-import express, { type Express } from "express";
+import express, {
+  type Express,
+  type NextFunction,
+  type Request,
+  type Response
+} from "express";
 import cors, { type CorsOptions } from "cors";
 import pinoHttp from "pino-http";
 import { apiRoutes } from "./api/routes";
@@ -31,6 +36,58 @@ export function createServer(): Express {
   app.use("/api/automations", automationPlaybooksRoutes);
   app.use("/api/settings", settingsRoutes);
   app.use("/api/v1", apiRoutes);
+  app.use("/api", (req, res) => {
+    res.status(404).json({
+      data: null,
+      error: {
+        code: "NOT_FOUND",
+        message: `Route not found: ${req.method} ${req.originalUrl}`
+      }
+    });
+  });
+  app.use(
+    (
+      error: unknown,
+      req: Request,
+      res: Response,
+      next: NextFunction
+    ): void => {
+      if (res.headersSent) {
+        next(error);
+        return;
+      }
+
+      if (!req.originalUrl.startsWith("/api")) {
+        next(error);
+        return;
+      }
+
+      const isInvalidJson =
+        error instanceof SyntaxError &&
+        typeof error.message === "string" &&
+        error.message.toLowerCase().includes("json");
+
+      if (isInvalidJson) {
+        res.status(400).json({
+          data: null,
+          error: {
+            code: "INVALID_JSON",
+            message: "Request body must be valid JSON"
+          }
+        });
+        return;
+      }
+
+      logger.error({ error, path: req.originalUrl }, "Unhandled API error");
+      res.status(500).json({
+        data: null,
+        error: {
+          code: "INTERNAL_ERROR",
+          message: "Internal server error"
+        }
+      });
+    }
+  );
 
   return app;
 }

@@ -13,6 +13,8 @@ import {
 
 const POLL_INTERVAL_MS = 3000;
 
+type ConnectionUiStatus = "disconnected" | "waiting_qr_scan" | "connected";
+
 export function ConnectWhatsappClient(): JSX.Element {
   const defaultWorkspaceId = useMemo(() => getDefaultWorkspaceId(), []);
   const [businessName, setBusinessName] = useState("");
@@ -134,6 +136,18 @@ export function ConnectWhatsappClient(): JSX.Element {
   }
 
   const showBusinessNameInput = !workspaceId;
+  const connectionStatus: ConnectionUiStatus = connected
+    ? "connected"
+    : qr || isPolling || isSubmitting
+      ? "waiting_qr_scan"
+      : "disconnected";
+
+  const connectionStatusCopy =
+    connectionStatus === "connected"
+      ? "Connected"
+      : connectionStatus === "waiting_qr_scan"
+        ? "Waiting for QR scan"
+        : "Disconnected";
 
   return (
     <section className="space-y-6">
@@ -172,8 +186,27 @@ export function ConnectWhatsappClient(): JSX.Element {
             className="rounded-xl bg-gradient-to-r from-cyan-400 to-blue-500 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:brightness-110 disabled:opacity-60"
             disabled={isSubmitting}
           >
-            {isSubmitting ? "Connecting..." : "Connect WhatsApp"}
+            {isSubmitting
+              ? "Connecting..."
+              : workspaceId
+                ? "Reconnect WhatsApp"
+                : "Connect WhatsApp"}
           </button>
+
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2 text-sm text-slate-300">
+            Connection status:{" "}
+            <span
+              className={
+                connectionStatus === "connected"
+                  ? "font-semibold text-emerald-200"
+                  : connectionStatus === "waiting_qr_scan"
+                    ? "font-semibold text-amber-200"
+                    : "font-semibold text-rose-200"
+              }
+            >
+              {connectionStatusCopy}
+            </span>
+          </div>
 
           {error ? (
             <p className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
