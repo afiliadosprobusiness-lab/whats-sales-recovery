@@ -54,6 +54,9 @@ Backend modular monolith (Node.js + TypeScript) using Baileys (`@whiskeysockets/
   - `POST /api/auth/register`
   - `POST /api/auth/login`
   - `POST /api/auth/logout`
+- Dashboard app includes local settings proxy handlers:
+  - `GET /api/settings/ai-chatbot`
+  - `POST /api/settings/ai-chatbot`
 - Dashboard auth uses signed JWT in `httpOnly` cookie (`rv_auth_token`).
 - Dashboard user credentials are persisted for MVP in JSON auth storage (`apps/dashboard/.data/users.json` in local dev, `/tmp/recuperaventas-dashboard/users.json` by default in production serverless) with bcrypt hashes.
 - PostgreSQL for domain data.

@@ -1,6 +1,5 @@
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3000/api/v1";
-const API_BASE_ORIGIN = getApiBaseOrigin(API_BASE_URL);
 const WORKSPACE_ID = process.env.NEXT_PUBLIC_WORKSPACE_ID ?? "";
 const WORKSPACE_STORAGE_KEY = "recuperaventas_workspace_id";
 
@@ -16,6 +15,10 @@ type ApiResponse<T> = {
 
 type OnboardingErrorResponse = {
   error?: ApiError;
+};
+
+type DashboardErrorResponse = {
+  error?: string;
 };
 
 export type ConversationItem = {
@@ -120,22 +123,6 @@ function isConfigured(): boolean {
   return Boolean(API_BASE_URL && WORKSPACE_ID);
 }
 
-function getApiBaseOrigin(apiBaseUrl: string): string {
-  try {
-    return new URL(apiBaseUrl).origin;
-  } catch {
-    return "";
-  }
-}
-
-function resolveAliasApiUrl(path: string): string {
-  if (!API_BASE_ORIGIN) {
-    return path;
-  }
-
-  return `${API_BASE_ORIGIN}${path}`;
-}
-
 function safeParseJson<T>(text: string): T | null {
   try {
     return JSON.parse(text) as T;
@@ -185,6 +172,34 @@ async function fetchApiByUrl<T>(
   }
 
   return payload.data;
+}
+
+async function fetchDashboardRoute<T>(
+  path: string,
+  init?: RequestInit
+): Promise<T> {
+  const response = await fetch(path, {
+    ...init,
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      ...(init?.headers ?? {})
+    },
+    cache: "no-store"
+  });
+
+  const payloadText = await response.text();
+  const payload = safeParseJson<T | DashboardErrorResponse>(payloadText);
+  if (!payload) {
+    throw new Error(formatNonJsonResponseError(path, response, payloadText));
+  }
+
+  if (!response.ok) {
+    const errorPayload = payload as DashboardErrorResponse;
+    throw new Error(errorPayload.error ?? `API request failed: ${path}`);
+  }
+
+  return payload as T;
 }
 
 async function fetchApi<T>(path: string, init?: RequestInit): Promise<T> {
@@ -362,12 +377,14 @@ export async function getAiChatbotSettings(input: {
   });
 
   const path = `/api/settings/ai-chatbot?${query.toString()}`;
-  const data = await fetchApiByUrl<AiChatbotSettingsApiData>(
-    resolveAliasApiUrl(path),
-    path
-  );
+  const data = await fetchDashboardRoute<{
+    ai_router_webhook_url?: string | null;
+  }>(path);
 
-  return mapAiChatbotSettings(data);
+  return mapAiChatbotSettings({
+    workspace_id: input.workspaceId,
+    ai_router_webhook_url: data.ai_router_webhook_url ?? ""
+  });
 }
 
 export async function saveAiChatbotSettings(input: {
@@ -379,8 +396,10 @@ export async function saveAiChatbotSettings(input: {
   });
 
   const path = `/api/settings/ai-chatbot?${query.toString()}`;
-  const data = await fetchApiByUrl<AiChatbotSettingsApiData>(
-    resolveAliasApiUrl(path),
+  const data = await fetchDashboardRoute<{
+    success?: boolean;
+    ai_router_webhook_url?: string | null;
+  }>(
     path,
     {
       method: "POST",
@@ -390,7 +409,15 @@ export async function saveAiChatbotSettings(input: {
     }
   );
 
-  return mapAiChatbotSettings(data);
+  if (!data.success) {
+    throw new Error("Could not save chatbot settings");
+  }
+
+  return mapAiChatbotSettings({
+    workspace_id: input.workspaceId,
+    ai_router_webhook_url:
+      data.ai_router_webhook_url ?? input.aiRouterWebhookUrl.trim()
+  });
 }
 
 export async function getAutomationPlaybooks(input: {

@@ -395,6 +395,7 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
   - `apps/landing` uses TailwindCSS and reusable section components based on the public SaaS landing design system.
   - `apps/dashboard` uses App Router + TailwindCSS for authenticated SaaS operations.
   - Dashboard authentication is handled by Next.js route handlers (`/api/auth/register`, `/api/auth/login`, `/api/auth/logout`) with JWT + `httpOnly` cookie session.
+  - Dashboard exposes a local settings proxy route (`GET/POST /api/settings/ai-chatbot`) that forwards to backend settings API and normalizes JSON-only responses.
   - User credentials are stored in JSON persistence for MVP (`apps/dashboard/.data/users.json` in local dev, `/tmp/recuperaventas-dashboard/users.json` in production serverless by default) with bcrypt hashing.
   - Dashboard onboarding UI renders WhatsApp QR as SVG using `qrcode.react` for scanner compatibility.
   - Dashboard sidebar exposes a direct `Connect WhatsApp` navigation entry and shows workspace connection indicator (`Connected` / `Not connected`).
