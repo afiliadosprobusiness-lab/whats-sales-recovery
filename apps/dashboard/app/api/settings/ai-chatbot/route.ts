@@ -15,17 +15,21 @@ type UpdateRequestBody = {
   ai_router_webhook_url?: string;
 };
 
-function getApiOrigin(): string | null {
-  const configured = process.env.NEXT_PUBLIC_API_BASE_URL;
+type UpstreamAttempt = {
+  url: string;
+  status: number;
+  contentType: string;
+  bodyText: string;
+  payload: UpstreamSettingsResponse | null;
+};
+
+function getConfiguredApiBaseUrl(): string | null {
+  const configured = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
   if (!configured) {
     return null;
   }
 
-  try {
-    return new URL(configured).origin;
-  } catch {
-    return null;
-  }
+  return configured.replace(/\/+$/, "");
 }
 
 function jsonError(message: string, status: number): NextResponse {
@@ -47,11 +51,7 @@ function ensureAuthenticated(): boolean {
   return Boolean(verifyAuthToken(token));
 }
 
-async function parseUpstreamJson(
-  response: Response
-): Promise<UpstreamSettingsResponse | null> {
-  const payloadText = await response.text();
-
+function parseUpstreamJson(payloadText: string): UpstreamSettingsResponse | null {
   try {
     return JSON.parse(payloadText) as UpstreamSettingsResponse;
   } catch {
@@ -59,14 +59,116 @@ async function parseUpstreamJson(
   }
 }
 
-function getUpstreamUrl(workspaceId: string): string | null {
-  const origin = getApiOrigin();
-  if (!origin) {
-    return null;
+function getUpstreamCandidateUrls(
+  workspaceId: string,
+  request: Request
+): string[] {
+  const baseUrl = getConfiguredApiBaseUrl();
+  if (!baseUrl) {
+    return [];
   }
 
   const query = new URLSearchParams({ workspaceId });
-  return `${origin}/api/settings/ai-chatbot?${query.toString()}`;
+  const candidates: string[] = [];
+
+  // Primary: use configured API base as-is (usually .../api/v1).
+  candidates.push(`${baseUrl}/settings/ai-chatbot?${query.toString()}`);
+
+  // Fallback: compatibility alias in backend API root.
+  try {
+    const origin = new URL(baseUrl).origin;
+    candidates.push(`${origin}/api/settings/ai-chatbot?${query.toString()}`);
+  } catch {
+    // Ignore invalid URL; request will fail gracefully later.
+  }
+
+  // Avoid infinite recursion when env accidentally points back to this dashboard route.
+  const currentUrl = new URL(request.url);
+  const deduped = Array.from(new Set(candidates));
+  return deduped.filter((candidate) => {
+    try {
+      const parsed = new URL(candidate);
+      return !(
+        parsed.origin === currentUrl.origin &&
+        parsed.pathname === "/api/settings/ai-chatbot"
+      );
+    } catch {
+      return true;
+    }
+  });
+}
+
+function logUpstreamAttempt(attempt: UpstreamAttempt): void {
+  console.error("[ai-chatbot-settings] Upstream response", {
+    url: attempt.url,
+    status: attempt.status,
+    contentType: attempt.contentType,
+    bodyPreview: attempt.bodyText.slice(0, 300)
+  });
+}
+
+async function requestUpstreamSettings(
+  urls: string[],
+  method: "GET" | "POST",
+  body?: UpdateRequestBody
+): Promise<
+  | { ok: true; payload: UpstreamSettingsResponse }
+  | { ok: false; status: number; message: string }
+> {
+  if (!urls.length) {
+    return { ok: false, status: 500, message: "API base URL is not configured" };
+  }
+
+  let lastStatus = 502;
+  let lastMessage = "Could not reach upstream settings API";
+
+  for (const url of urls) {
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json"
+        },
+        body: body ? JSON.stringify(body) : undefined,
+        cache: "no-store"
+      });
+
+      const bodyText = await response.text();
+      const contentType = response.headers.get("content-type") ?? "unknown";
+      const payload = parseUpstreamJson(bodyText);
+
+      logUpstreamAttempt({
+        url,
+        status: response.status,
+        contentType,
+        bodyText,
+        payload
+      });
+
+      if (!payload) {
+        lastStatus = 502;
+        lastMessage =
+          "Upstream API returned non-JSON response. Check API base URL/path.";
+        continue;
+      }
+
+      if (!response.ok || payload.error) {
+        lastStatus = response.status || 502;
+        lastMessage =
+          payload.error?.message ?? `Upstream request failed (${response.status})`;
+        continue;
+      }
+
+      return { ok: true, payload };
+    } catch (error) {
+      console.error("[ai-chatbot-settings] Upstream request failed", { url, error });
+      lastStatus = 502;
+      lastMessage = "Could not reach upstream settings API";
+    }
+  }
+
+  return { ok: false, status: lastStatus, message: lastMessage };
 }
 
 export async function GET(request: Request): Promise<NextResponse> {
@@ -79,39 +181,15 @@ export async function GET(request: Request): Promise<NextResponse> {
     return jsonError("workspaceId query param is required", 400);
   }
 
-  const upstreamUrl = getUpstreamUrl(workspaceId);
-  if (!upstreamUrl) {
-    return jsonError("API base URL is not configured", 500);
+  const upstreamUrls = getUpstreamCandidateUrls(workspaceId, request);
+  const result = await requestUpstreamSettings(upstreamUrls, "GET");
+  if (!result.ok) {
+    return jsonError(result.message, result.status);
   }
 
-  try {
-    const upstreamResponse = await fetch(upstreamUrl, {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json"
-      },
-      cache: "no-store"
-    });
-
-    const upstreamPayload = await parseUpstreamJson(upstreamResponse);
-    if (!upstreamPayload) {
-      return jsonError("Upstream API returned non-JSON response", 502);
-    }
-
-    if (!upstreamResponse.ok || upstreamPayload.error) {
-      return jsonError(
-        upstreamPayload.error?.message ?? "Could not load AI chatbot settings",
-        upstreamResponse.status || 502
-      );
-    }
-
-    return NextResponse.json({
-      ai_router_webhook_url: upstreamPayload.data?.ai_router_webhook_url ?? ""
-    });
-  } catch {
-    return jsonError("Could not reach upstream settings API", 502);
-  }
+  return NextResponse.json({
+    ai_router_webhook_url: result.payload.data?.ai_router_webhook_url ?? ""
+  });
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
@@ -124,11 +202,6 @@ export async function POST(request: Request): Promise<NextResponse> {
     return jsonError("workspaceId query param is required", 400);
   }
 
-  const upstreamUrl = getUpstreamUrl(workspaceId);
-  if (!upstreamUrl) {
-    return jsonError("API base URL is not configured", 500);
-  }
-
   const body = (await request.json().catch(() => null)) as UpdateRequestBody | null;
   const aiRouterWebhookUrl = body?.ai_router_webhook_url?.trim() ?? "";
   if (!aiRouterWebhookUrl || !/^https?:\/\//i.test(aiRouterWebhookUrl)) {
@@ -138,36 +211,13 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   }
 
-  try {
-    const upstreamResponse = await fetch(upstreamUrl, {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        ai_router_webhook_url: aiRouterWebhookUrl
-      }),
-      cache: "no-store"
-    });
-
-    const upstreamPayload = await parseUpstreamJson(upstreamResponse);
-    if (!upstreamPayload) {
-      return jsonError("Upstream API returned non-JSON response", 502);
-    }
-
-    if (!upstreamResponse.ok || upstreamPayload.error) {
-      return jsonError(
-        upstreamPayload.error?.message ?? "Could not update AI chatbot settings",
-        upstreamResponse.status || 502
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      ai_router_webhook_url: upstreamPayload.data?.ai_router_webhook_url ?? ""
-    });
-  } catch {
-    return jsonError("Could not reach upstream settings API", 502);
+  const upstreamUrls = getUpstreamCandidateUrls(workspaceId, request);
+  const result = await requestUpstreamSettings(upstreamUrls, "POST", {
+    ai_router_webhook_url: aiRouterWebhookUrl
+  });
+  if (!result.ok) {
+    return jsonError(result.message, result.status);
   }
+
+  return NextResponse.json({ success: true });
 }
