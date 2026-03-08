@@ -391,11 +391,7 @@ export async function saveAiChatbotSettings(input: {
   workspaceId: string;
   aiRouterWebhookUrl: string;
 }): Promise<AiChatbotSettings> {
-  const query = new URLSearchParams({
-    workspaceId: input.workspaceId
-  });
-
-  const path = `/api/settings/ai-chatbot?${query.toString()}`;
+  const path = "/api/settings/ai-chatbot";
   const data = await fetchDashboardRoute<{
     success?: boolean;
     ai_router_webhook_url?: string | null;
@@ -404,6 +400,7 @@ export async function saveAiChatbotSettings(input: {
     {
       method: "POST",
       body: JSON.stringify({
+        workspaceId: input.workspaceId,
         ai_router_webhook_url: input.aiRouterWebhookUrl.trim()
       })
     }

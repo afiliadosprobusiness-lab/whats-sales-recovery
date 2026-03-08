@@ -57,7 +57,7 @@ Backend modular monolith (Node.js + TypeScript) using Baileys (`@whiskeysockets/
 - Dashboard app includes local settings proxy handlers:
   - `GET /api/settings/ai-chatbot`
   - `POST /api/settings/ai-chatbot`
-- Local settings proxy resolves upstream using `NEXT_PUBLIC_API_BASE_URL + /settings/ai-chatbot` and falls back to `/api/settings/ai-chatbot`, with JSON-only error normalization.
+- AI chatbot settings are stored directly in dashboard local storage (`workspace-settings.json`) using a serverless-safe writable path (env override: `WORKSPACE_SETTINGS_FILE_PATH`, fallback `/tmp/recuperaventas-dashboard/workspace-settings.json` in production).
 - Dashboard auth uses signed JWT in `httpOnly` cookie (`rv_auth_token`).
 - Dashboard user credentials are persisted for MVP in JSON auth storage (`apps/dashboard/.data/users.json` in local dev, `/tmp/recuperaventas-dashboard/users.json` by default in production serverless) with bcrypt hashes.
 - PostgreSQL for domain data.
