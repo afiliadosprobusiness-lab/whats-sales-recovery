@@ -17,6 +17,14 @@ type OnboardingErrorResponse = {
   error?: ApiError;
 };
 
+type OnboardingDisconnectResponse = {
+  success: boolean;
+  workspace_id: string;
+  session_id: string;
+  status: "disconnected";
+  auth_session_files: "preserved" | "cleared";
+};
+
 export type ConversationItem = {
   id: string;
   workspaceId: string;
@@ -519,6 +527,35 @@ export async function getWhatsappSessionStatusByWorkspace(input: {
   return {
     connected: payload.connected
   };
+}
+
+export async function disconnectWhatsappSessionByWorkspace(input: {
+  workspaceId: string;
+}): Promise<OnboardingDisconnectResponse> {
+  const response = await fetch(`${API_BASE_URL}/whatsapp/session/disconnect`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      workspace_id: input.workspaceId
+    })
+  });
+
+  const payload = (await response.json()) as
+    | OnboardingDisconnectResponse
+    | OnboardingErrorResponse;
+
+  if (!response.ok || !("success" in payload) || !payload.success) {
+    throw new Error(
+      getOnboardingErrorMessage(
+        payload,
+        "Could not disconnect WhatsApp session"
+      )
+    );
+  }
+
+  return payload;
 }
 
 export function getStoredWorkspaceId(): string | null {

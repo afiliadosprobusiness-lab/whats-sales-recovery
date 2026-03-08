@@ -114,3 +114,51 @@ export async function getWhatsappSessionStatus(
     });
   }
 }
+
+export async function disconnectWhatsappSession(
+  req: Request,
+  res: Response
+): Promise<void> {
+  const parsed = workspaceIdBodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    sendValidationError(res, parsed.error.issues[0]?.message ?? "Invalid input");
+    return;
+  }
+
+  const workspaceId = parsed.data.workspace_id;
+
+  try {
+    logger.info({ workspaceId }, "WhatsApp disconnect requested");
+
+    const session =
+      await services.whatsappSessionManager.disconnectWorkspaceSession(
+        workspaceId
+      );
+
+    if (!session) {
+      res.status(404).json({
+        error: {
+          code: "SESSION_NOT_FOUND",
+          message: "No WhatsApp session found for workspace"
+        }
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      workspace_id: session.workspaceId,
+      session_id: session.id,
+      status: session.status,
+      auth_session_files: "preserved"
+    });
+  } catch (error) {
+    logger.error({ error, workspaceId }, "Failed to disconnect WhatsApp session");
+    res.status(500).json({
+      error: {
+        code: "INTERNAL_ERROR",
+        message: "Could not disconnect WhatsApp session"
+      }
+    });
+  }
+}

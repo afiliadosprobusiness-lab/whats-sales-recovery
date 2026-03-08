@@ -406,6 +406,7 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
   - In-memory sockets are keyed by `workspace_id` and reused (one socket per workspace).
   - No Chromium/Puppeteer runtime dependency.
   - On `connection.update.close`, sockets reconnect automatically unless disconnect reason is `loggedOut`.
+  - Manual disconnect closes the active socket, marks DB status as `disconnected`, removes in-memory socket/listener references, and preserves persisted auth session files for future reconnects.
   - Startup restore uses DB reconnect candidates (`whatsapp_sessions.status IN ('connected','pending_qr')`) and re-initializes listeners per workspace.
   - Lifecycle observability logs include `qr`, `authenticated`, `connected`, `disconnected`, and last disconnect reason/status code.
   - Incoming message observability logs are emitted from `messages.upsert`.
@@ -524,6 +525,7 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
 - `POST /api/v1/workspaces`
 - `POST /api/v1/whatsapp/session/start`
 - `GET /api/v1/whatsapp/session/status`
+- `POST /api/v1/whatsapp/session/disconnect`
 - `POST /api/v1/sessions/whatsapp/start`
 - `GET /api/v1/sessions/whatsapp/:sessionId/qr`
 - `GET /api/v1/sessions/whatsapp/:sessionId/status`
@@ -580,7 +582,7 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
   - `/dashboard`
     - SaaS metrics cards (placeholder integrations).
   - `/connect-whatsapp`
-    - Shows QR area, explicit connection status (`Disconnected`, `Waiting for QR scan`, `Connected`), and reconnect CTA.
+    - Shows QR area, explicit connection status (`Disconnected`, `Waiting for QR scan`, `Connected`), connect/disconnect actions, and optional reconnect secondary CTA.
     - Workspace creation + WhatsApp QR connection flow.
   - `/conversations`
     - CRM layout with conversation list, chat window, and customer info panel.

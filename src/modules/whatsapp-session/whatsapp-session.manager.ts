@@ -69,6 +69,7 @@ export class WhatsAppSessionManager {
     workspaceId: string,
     options: { isStartupRestore?: boolean } = {}
   ): Promise<WhatsAppSessionRecord> {
+    this.manualDisconnectWorkspaces.delete(workspaceId);
     await this.repository.upsertWorkspace(workspaceId);
 
     const existing = await this.repository.findByWorkspaceId(workspaceId);
@@ -101,24 +102,64 @@ export class WhatsAppSessionManager {
     return this.waitForSessionQr(session.id);
   }
 
+  async disconnectWorkspaceSession(
+    workspaceId: string
+  ): Promise<WhatsAppSessionRecord | null> {
+    const session = await this.repository.findByWorkspaceId(workspaceId);
+    if (!session) {
+      return null;
+    }
+
+    return this.disconnectSession(session.id);
+  }
+
   async disconnectSession(sessionId: string): Promise<WhatsAppSessionRecord | null> {
     const session = await this.repository.findById(sessionId);
     if (!session) {
       return null;
     }
 
+    logger.info(
+      { workspaceId: session.workspaceId, sessionId },
+      "WhatsApp disconnect requested"
+    );
+
     const socket = this.sessionsByWorkspaceId.get(session.workspaceId);
     if (socket) {
       try {
         this.manualDisconnectWorkspaces.add(session.workspaceId);
         socket.end(new Error("Manual disconnect"));
+        logger.info(
+          { workspaceId: session.workspaceId, sessionId },
+          "WhatsApp socket closed"
+        );
+      } catch (error) {
+        logger.warn(
+          { workspaceId: session.workspaceId, sessionId, error },
+          "Failed to close WhatsApp socket cleanly"
+        );
       } finally {
+        this.cleanupSocketRuntime(session.workspaceId, socket);
         this.manualDisconnectWorkspaces.delete(session.workspaceId);
-        this.sessionsByWorkspaceId.delete(session.workspaceId);
+        logger.info(
+          { workspaceId: session.workspaceId, sessionId },
+          "WhatsApp cleanup completed"
+        );
       }
+    } else {
+      this.cleanupSocketRuntime(session.workspaceId);
+      this.manualDisconnectWorkspaces.delete(session.workspaceId);
+      logger.info(
+        { workspaceId: session.workspaceId, sessionId },
+        "WhatsApp cleanup completed"
+      );
     }
 
     await this.repository.setStatus(sessionId, "disconnected");
+    logger.info(
+      { workspaceId: session.workspaceId, sessionId },
+      "WhatsApp session disconnected"
+    );
     return this.repository.findById(sessionId);
   }
 
@@ -277,12 +318,14 @@ export class WhatsAppSessionManager {
         return;
       }
 
-      this.sessionsByWorkspaceId.delete(workspaceId);
+      this.cleanupSocketRuntime(workspaceId, socket);
       void this.repository.setStatus(sessionId, "disconnected");
+      logger.info({ workspaceId, sessionId }, "WhatsApp socket closed");
 
       if (this.manualDisconnectWorkspaces.has(workspaceId)) {
         this.manualDisconnectWorkspaces.delete(workspaceId);
         logger.info({ workspaceId, sessionId }, "WhatsApp session disconnected");
+        logger.info({ workspaceId, sessionId }, "WhatsApp cleanup completed");
         return;
       }
 
@@ -413,5 +456,29 @@ export class WhatsAppSessionManager {
     } finally {
       this.reconnectingWorkspaces.delete(workspaceId);
     }
+  }
+
+  private cleanupSocketRuntime(workspaceId: string, socket?: WASocket): void {
+    const activeSocket = socket ?? this.sessionsByWorkspaceId.get(workspaceId);
+    if (activeSocket) {
+      this.detachSocketListeners(activeSocket);
+    }
+
+    this.sessionsByWorkspaceId.delete(workspaceId);
+    this.reconnectingWorkspaces.delete(workspaceId);
+  }
+
+  private detachSocketListeners(socket: WASocket): void {
+    const emitter = socket.ev as unknown as {
+      removeAllListeners?: (eventName?: string) => void;
+    };
+
+    if (typeof emitter.removeAllListeners !== "function") {
+      return;
+    }
+
+    emitter.removeAllListeners("messages.upsert");
+    emitter.removeAllListeners("connection.update");
+    emitter.removeAllListeners("creds.update");
   }
 }

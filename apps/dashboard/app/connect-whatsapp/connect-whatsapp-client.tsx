@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import {
   createWorkspace,
+  disconnectWhatsappSessionByWorkspace,
   getDefaultWorkspaceId,
   getStoredWorkspaceId,
   getWhatsappSessionStatusByWorkspace,
@@ -22,8 +23,10 @@ export function ConnectWhatsappClient(): JSX.Element {
   const [qr, setQr] = useState("");
   const [connected, setConnected] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [isPolling, setIsPolling] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const storedWorkspaceId = getStoredWorkspaceId();
@@ -94,8 +97,12 @@ export function ConnectWhatsappClient(): JSX.Element {
 
   async function onSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
+    await connectWhatsapp();
+  }
+
+  async function connectWhatsapp(): Promise<void> {
     setError(null);
-    setConnected(false);
+    setSuccessMessage(null);
     setIsSubmitting(true);
 
     try {
@@ -113,16 +120,12 @@ export function ConnectWhatsappClient(): JSX.Element {
         saveWorkspaceId(nextWorkspaceId);
       }
 
-      const session = await startWhatsappSessionByWorkspace({
+      const isNowConnected = await startAndSyncSession({
         workspaceId: nextWorkspaceId
       });
-      setQr(session.qr);
-
-      const status = await getWhatsappSessionStatusByWorkspace({
-        workspaceId: nextWorkspaceId
-      });
-      setConnected(status.connected);
-      setIsPolling(!status.connected);
+      if (isNowConnected) {
+        setSuccessMessage("WhatsApp connected successfully.");
+      }
     } catch (submitError) {
       const message =
         submitError instanceof Error
@@ -135,7 +138,96 @@ export function ConnectWhatsappClient(): JSX.Element {
     }
   }
 
+  async function startAndSyncSession(input: {
+    workspaceId: string;
+  }): Promise<boolean> {
+    const session = await startWhatsappSessionByWorkspace({
+      workspaceId: input.workspaceId
+    });
+    setQr(session.qr);
+
+    const status = await getWhatsappSessionStatusByWorkspace({
+      workspaceId: input.workspaceId
+    });
+    setConnected(status.connected);
+    setIsPolling(!status.connected);
+
+    return status.connected;
+  }
+
+  async function disconnectWhatsapp(): Promise<void> {
+    if (!workspaceId) {
+      return;
+    }
+
+    const shouldDisconnect = window.confirm(
+      "Are you sure you want to disconnect this WhatsApp session?"
+    );
+    if (!shouldDisconnect) {
+      return;
+    }
+
+    setError(null);
+    setSuccessMessage(null);
+    setIsDisconnecting(true);
+
+    try {
+      await disconnectWhatsappSessionByWorkspace({ workspaceId });
+      setConnected(false);
+      setQr("");
+      setIsPolling(false);
+      setSuccessMessage("WhatsApp session disconnected successfully.");
+    } catch (disconnectError) {
+      const message =
+        disconnectError instanceof Error
+          ? disconnectError.message
+          : "Could not disconnect WhatsApp.";
+      setError(message);
+    } finally {
+      setIsDisconnecting(false);
+    }
+  }
+
+  async function reconnectWhatsapp(): Promise<void> {
+    if (!workspaceId) {
+      return;
+    }
+
+    setError(null);
+    setSuccessMessage(null);
+    setIsSubmitting(true);
+    setIsDisconnecting(true);
+
+    try {
+      await disconnectWhatsappSessionByWorkspace({ workspaceId });
+      setConnected(false);
+      setQr("");
+      setIsPolling(false);
+
+      const isNowConnected = await startAndSyncSession({
+        workspaceId
+      });
+
+      setSuccessMessage(
+        isNowConnected
+          ? "WhatsApp reconnected successfully."
+          : "WhatsApp reconnection started. Scan the QR code."
+      );
+    } catch (reconnectError) {
+      const message =
+        reconnectError instanceof Error
+          ? reconnectError.message
+          : "Could not reconnect WhatsApp.";
+      setError(message);
+      setIsPolling(false);
+    } finally {
+      setIsSubmitting(false);
+      setIsDisconnecting(false);
+    }
+  }
+
   const showBusinessNameInput = !workspaceId;
+  const isBusy = isSubmitting || isDisconnecting;
   const connectionStatus: ConnectionUiStatus = connected
     ? "connected"
     : qr || isPolling || isSubmitting
@@ -181,17 +273,38 @@ export function ConnectWhatsappClient(): JSX.Element {
             </div>
           )}
 
-          <button
-            type="submit"
-            className="rounded-xl bg-gradient-to-r from-cyan-400 to-blue-500 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:brightness-110 disabled:opacity-60"
-            disabled={isSubmitting}
-          >
-            {isSubmitting
-              ? "Connecting..."
-              : workspaceId
-                ? "Reconnect WhatsApp"
-                : "Connect WhatsApp"}
-          </button>
+          {!connected ? (
+            <button
+              type="submit"
+              className="rounded-xl bg-gradient-to-r from-cyan-400 to-blue-500 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:brightness-110 disabled:opacity-60"
+              disabled={isBusy}
+            >
+              {isSubmitting ? "Connecting..." : "Connect WhatsApp"}
+            </button>
+          ) : (
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  void disconnectWhatsapp();
+                }}
+                className="rounded-xl bg-gradient-to-r from-rose-400 to-red-500 px-4 py-3 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
+                disabled={isBusy}
+              >
+                {isDisconnecting ? "Disconnecting..." : "Disconnect WhatsApp"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void reconnectWhatsapp();
+                }}
+                className="rounded-xl border border-white/20 bg-white/[0.02] px-4 py-3 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.08] disabled:opacity-60"
+                disabled={isBusy}
+              >
+                {isSubmitting ? "Reconnecting..." : "Reconnect WhatsApp"}
+              </button>
+            </div>
+          )}
 
           <div className="rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2 text-sm text-slate-300">
             Connection status:{" "}
@@ -214,9 +327,9 @@ export function ConnectWhatsappClient(): JSX.Element {
             </p>
           ) : null}
 
-          {connected ? (
+          {successMessage ? (
             <p className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">
-              WhatsApp connected successfully
+              {successMessage}
             </p>
           ) : null}
         </form>

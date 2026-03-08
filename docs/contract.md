@@ -75,6 +75,27 @@ Response `200`:
 }
 ```
 
+### `POST /whatsapp/session/disconnect`
+Disconnects the active WhatsApp session for the given workspace.
+
+Request:
+```json
+{
+  "workspace_id": "6a327bb8-f9e4-4f0d-8f72-b0c39b3ef8ea"
+}
+```
+
+Response `200`:
+```json
+{
+  "success": true,
+  "workspace_id": "6a327bb8-f9e4-4f0d-8f72-b0c39b3ef8ea",
+  "session_id": "a4bb04f2-5d53-454f-87db-84ff01a49bd4",
+  "status": "disconnected",
+  "auth_session_files": "preserved"
+}
+```
+
 ## 3.1 WhatsApp sessions
 
 ### `POST /sessions/whatsapp/start`
@@ -1146,3 +1167,9 @@ Notes:
   - Added `POST /settings/ai-chatbot`.
   - Extended `automation_settings` with `ai_router_webhook_url`.
   - Added inbound message forwarding payload dispatch to workspace-configured AI router webhook.
+- Date: 2026-03-07
+- Change: Added onboarding disconnect endpoint for workspace-scoped WhatsApp session termination.
+- Type: Non-breaking (new onboarding endpoint).
+- Impact:
+  - Added `POST /whatsapp/session/disconnect`.
+  - Response now states session disconnect result and auth-session persistence behavior (`auth_session_files: preserved`).

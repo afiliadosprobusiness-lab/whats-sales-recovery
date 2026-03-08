@@ -15,7 +15,7 @@ Backend modular monolith (Node.js + TypeScript) using Baileys (`@whiskeysockets/
 - Dashboard root (`/`) redirect logic:
   - guest -> `/register`
   - authenticated user -> `/connect-whatsapp`
-- MVP onboarding: workspace creation + WhatsApp connection via QR in dashboard.
+- MVP onboarding: workspace creation + WhatsApp connection/disconnection via QR flow in dashboard.
 - Dashboard connect screen uses `qrcode.react` to render scannable WhatsApp QR images.
 - Dashboard sidebar includes a visible `Connect WhatsApp` entry and a small workspace connection indicator (`Connected`/`Not connected`).
 - WhatsApp session connection and restore with workspace-level in-memory socket reuse.
@@ -69,6 +69,7 @@ Backend modular monolith (Node.js + TypeScript) using Baileys (`@whiskeysockets/
 - WhatsApp socket instances are keyed by workspace and reused across repeated start requests (one socket per workspace).
 - No Chromium/Puppeteer dependency in runtime.
 - WhatsApp session reconnects automatically after `connection.update.close` unless reason is `DisconnectReason.loggedOut`.
+- Manual disconnect endpoint (`POST /api/v1/whatsapp/session/disconnect`) closes active socket, marks `whatsapp_sessions.status = disconnected`, clears in-memory socket/listener references, and preserves auth-session files for future reconnect.
 - Startup restoration uses reconnectable DB sessions (`whatsapp_sessions.status` = `connected|pending_qr`) so listeners are reattached after process restart.
 - WhatsApp session lifecycle logs include explicit stages (`initialized`, `connected`, `disconnected`) plus `authenticated`, QR generation, disconnect reason/status code, and inbound diagnostics.
 - Campaign worker sends one scheduled campaign message at a time and waits 5-10 seconds before the next send.
@@ -164,7 +165,7 @@ Backend modular monolith (Node.js + TypeScript) using Baileys (`@whiskeysockets/
   - `/login`
   - `/dashboard`
   - `/connect-whatsapp`
-    - Existing onboarding flow with QR scan, status labels (`Disconnected`, `Waiting for QR scan`, `Connected`), and reconnect action.
+    - Existing onboarding flow with QR scan, status labels (`Disconnected`, `Waiting for QR scan`, `Connected`), primary `Disconnect WhatsApp` action while connected, and optional reconnect secondary action.
   - `/conversations`
   - `/conversations/:id`
   - `/recovery`
