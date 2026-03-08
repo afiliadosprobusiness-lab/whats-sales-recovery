@@ -144,9 +144,10 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
 
 ### Flow B: Message ingestion
 1. Active Baileys socket receives `messages.upsert`.
-2. Message ingestion normalizes payload.
-3. Domain event `message_received` is emitted.
-4. Conversation tracker consumes event and persists contact/conversation/message.
+2. Message ingestion accepts `notify` and `append` upsert types, logs inbound event metadata, and can emit sanitized raw event diagnostics when enabled.
+3. Message ingestion normalizes payload.
+4. Domain event `message_received` is emitted.
+5. Conversation tracker consumes event and persists contact/conversation/message.
 
 ### Flow C: Conversation tracking
 1. Contact is created if phone does not exist.
@@ -395,16 +396,17 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
   - `apps/landing` uses TailwindCSS and reusable section components based on the public SaaS landing design system.
   - `apps/dashboard` uses App Router + TailwindCSS for authenticated SaaS operations.
   - Dashboard authentication is handled by Next.js route handlers (`/api/auth/register`, `/api/auth/login`, `/api/auth/logout`) with JWT + `httpOnly` cookie session.
-  - Dashboard exposes local settings routes (`GET/POST /api/settings/ai-chatbot`) that persist `ai_router_webhook_url` directly in dashboard storage (`workspace-settings.json`) with a serverless-safe writable path.
+  - Dashboard AI chatbot settings UI persists `ai_router_webhook_url` through backend settings endpoints (`GET/POST /api/v1/settings/ai-chatbot` and compatibility alias `/api/settings/ai-chatbot`).
   - User credentials are stored in JSON persistence for MVP (`apps/dashboard/.data/users.json` in local dev, `/tmp/recuperaventas-dashboard/users.json` in production serverless by default) with bcrypt hashing.
   - Dashboard onboarding UI renders WhatsApp QR as SVG using `qrcode.react` for scanner compatibility.
   - Dashboard sidebar exposes a direct `Connect WhatsApp` navigation entry and shows workspace connection indicator (`Connected` / `Not connected`).
 - In-process WhatsApp session sockets (`@whiskeysockets/baileys`).
-  - Session auth state is persisted under `sessions/{workspace_id}` using `useMultiFileAuthState`.
+  - Session auth state is persisted under `${WHATSAPP_SESSION_DATA_PATH}/{workspace_id}` using `useMultiFileAuthState` (with legacy `sessions/{workspace_id}` fallback).
   - Socket startup fetches latest WhatsApp Web protocol version via `fetchLatestBaileysVersion` and passes it to `makeWASocket`.
   - In-memory sockets are keyed by `workspace_id` and reused (one socket per workspace).
   - No Chromium/Puppeteer runtime dependency.
   - On `connection.update.close`, sockets reconnect automatically unless disconnect reason is `loggedOut`.
+  - Startup restore uses DB reconnect candidates (`whatsapp_sessions.status IN ('connected','pending_qr')`) and re-initializes listeners per workspace.
   - Lifecycle observability logs include `qr`, `authenticated`, `connected`, `disconnected`, and last disconnect reason/status code.
   - Incoming message observability logs are emitted from `messages.upsert`.
 - PostgreSQL as source of truth.
@@ -603,6 +605,7 @@ Recover lost WhatsApp sales by detecting inactive conversations and sending auto
 - `IDLE_THRESHOLD_HOURS`
 - `RECOVERY_TEMPLATE_TEXT`
 - `LOG_LEVEL`
+- `WHATSAPP_INBOUND_DIAGNOSTIC_MODE` (optional, default `false`)
 - `OPENAI_API_KEY` (optional)
 - `OPENAI_MODEL`
 - `OPENAI_BASE_URL`

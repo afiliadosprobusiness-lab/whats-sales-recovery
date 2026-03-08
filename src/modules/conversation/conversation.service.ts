@@ -16,6 +16,11 @@ import {
 } from "../../services/n8n-chatbot";
 import { ConversationRepository } from "./conversation.repository";
 
+type InboundForwardDecision = {
+  shouldForward: boolean;
+  reason: "not_inbound" | "empty_message_body" | null;
+};
+
 export class ConversationService {
   constructor(
     private readonly repository: ConversationRepository,
@@ -70,10 +75,22 @@ export class ConversationService {
     });
 
     if (!inserted) {
-      logger.debug(
-        { providerMessageId: payload.providerMessageId },
-        "Ignoring duplicated message"
-      );
+      if (payload.direction === "inbound") {
+        logger.info(
+          {
+            workspaceId: event.workspaceId,
+            sessionId: payload.sessionId,
+            providerMessageId: payload.providerMessageId,
+            reason: "duplicate_message"
+          },
+          "inbound message ignored (and why)"
+        );
+      } else {
+        logger.debug(
+          { providerMessageId: payload.providerMessageId },
+          "Ignoring duplicated message"
+        );
+      }
       return;
     }
 
@@ -109,19 +126,36 @@ export class ConversationService {
         status: "open"
       });
 
-      if (this.shouldForwardInboundTextMessage(payload)) {
-        const leadStatus = existingConversation?.status ?? "new";
-        const conversationIdForWebhook =
-          existingConversation?.id ??
-          this.buildStableConversationId(event.workspaceId, contact.phoneE164);
+      const forwardDecision = this.evaluateInboundForwarding(payload);
+      if (!forwardDecision.shouldForward) {
+        logger.info(
+          {
+            workspaceId: event.workspaceId,
+            sessionId: payload.sessionId,
+            conversationId: conversation.id,
+            providerMessageId: payload.providerMessageId,
+            messageType: payload.messageType,
+            reason: forwardDecision.reason
+          },
+          "inbound message ignored (and why)"
+        );
+      } else {
+        logger.info(
+          {
+            workspaceId: event.workspaceId,
+            sessionId: payload.sessionId,
+            conversationId: conversation.id
+          },
+          "Workspace association validated for inbound routing"
+        );
 
         this.triggerAiChatbotWebhook({
           workspace_id: event.workspaceId,
           phone: contact.phoneE164,
           lead_name: contact.displayName ?? payload.contactName ?? "",
           message: payload.bodyText?.trim() ?? "",
-          lead_status: leadStatus,
-          conversation_id: conversationIdForWebhook,
+          lead_status: conversation.status,
+          conversation_id: conversation.id,
           timestamp: payload.occurredAt
         });
       }
@@ -144,26 +178,28 @@ export class ConversationService {
     void this.n8nChatbotService.forwardIncomingMessageToAiRouter(payload);
   }
 
-  private shouldForwardInboundTextMessage(
+  private evaluateInboundForwarding(
     payload: MessageReceivedEvent["payload"]
-  ): boolean {
+  ): InboundForwardDecision {
     if (payload.direction !== "inbound") {
-      return false;
+      return {
+        shouldForward: false,
+        reason: "not_inbound"
+      };
     }
 
     const bodyText = payload.bodyText?.trim() ?? "";
     if (!bodyText) {
-      return false;
+      return {
+        shouldForward: false,
+        reason: "empty_message_body"
+      };
     }
 
-    return (
-      payload.messageType === "conversation" ||
-      payload.messageType === "extendedTextMessage"
-    );
-  }
-
-  private buildStableConversationId(workspaceId: string, phone: string): string {
-    return `${workspaceId}:${phone}`;
+    return {
+      shouldForward: true,
+      reason: null
+    };
   }
 
   async listConversations(input: {

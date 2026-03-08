@@ -17,10 +17,6 @@ type OnboardingErrorResponse = {
   error?: ApiError;
 };
 
-type DashboardErrorResponse = {
-  error?: string;
-};
-
 export type ConversationItem = {
   id: string;
   workspaceId: string;
@@ -172,34 +168,6 @@ async function fetchApiByUrl<T>(
   }
 
   return payload.data;
-}
-
-async function fetchDashboardRoute<T>(
-  path: string,
-  init?: RequestInit
-): Promise<T> {
-  const response = await fetch(path, {
-    ...init,
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {})
-    },
-    cache: "no-store"
-  });
-
-  const payloadText = await response.text();
-  const payload = safeParseJson<T | DashboardErrorResponse>(payloadText);
-  if (!payload) {
-    throw new Error(formatNonJsonResponseError(path, response, payloadText));
-  }
-
-  if (!response.ok) {
-    const errorPayload = payload as DashboardErrorResponse;
-    throw new Error(errorPayload.error ?? `API request failed: ${path}`);
-  }
-
-  return payload as T;
 }
 
 async function fetchApi<T>(path: string, init?: RequestInit): Promise<T> {
@@ -376,45 +344,32 @@ export async function getAiChatbotSettings(input: {
     workspaceId: input.workspaceId
   });
 
-  const path = `/api/settings/ai-chatbot?${query.toString()}`;
-  const data = await fetchDashboardRoute<{
-    ai_router_webhook_url?: string | null;
-  }>(path);
+  const data = await fetchApi<AiChatbotSettingsApiData>(
+    `/settings/ai-chatbot?${query.toString()}`
+  );
 
-  return mapAiChatbotSettings({
-    workspace_id: input.workspaceId,
-    ai_router_webhook_url: data.ai_router_webhook_url ?? ""
-  });
+  return mapAiChatbotSettings(data);
 }
 
 export async function saveAiChatbotSettings(input: {
   workspaceId: string;
   aiRouterWebhookUrl: string;
 }): Promise<AiChatbotSettings> {
-  const path = "/api/settings/ai-chatbot";
-  const data = await fetchDashboardRoute<{
-    success?: boolean;
-    ai_router_webhook_url?: string | null;
-  }>(
-    path,
+  const query = new URLSearchParams({
+    workspaceId: input.workspaceId
+  });
+
+  const data = await fetchApi<AiChatbotSettingsApiData>(
+    `/settings/ai-chatbot?${query.toString()}`,
     {
       method: "POST",
       body: JSON.stringify({
-        workspaceId: input.workspaceId,
         ai_router_webhook_url: input.aiRouterWebhookUrl.trim()
       })
     }
   );
 
-  if (!data.success) {
-    throw new Error("Could not save chatbot settings");
-  }
-
-  return mapAiChatbotSettings({
-    workspace_id: input.workspaceId,
-    ai_router_webhook_url:
-      data.ai_router_webhook_url ?? input.aiRouterWebhookUrl.trim()
-  });
+  return mapAiChatbotSettings(data);
 }
 
 export async function getAutomationPlaybooks(input: {

@@ -1,4 +1,5 @@
 import { type WASocket, type WAMessage, type proto } from "@whiskeysockets/baileys";
+import { env } from "../../config/env";
 import {
   createMessageReceivedEvent,
   type MessageReceivedPayload
@@ -7,14 +8,32 @@ import { eventBus } from "../../events/event-bus";
 import { logger } from "../../utils/logger";
 import { type SalesAssistantService } from "../sales-assistant/sales-assistant.service";
 
+const SUPPORTED_UPSERT_TYPES = new Set(["notify", "append"]);
+
 type AttachSessionInput = {
   workspaceId: string;
   sessionId: string;
   socket: WASocket;
 };
 
+type NormalizedIncomingMessage = {
+  payload: MessageReceivedPayload;
+  reason: null;
+  details: Record<string, unknown>;
+} | {
+  payload: null;
+  reason:
+    | "missing_remote_jid"
+    | "group_message"
+    | "broadcast_message"
+    | "invalid_contact_phone"
+    | "missing_provider_message_id";
+  details: Record<string, unknown>;
+};
+
 export class MessageIngestionService {
   private salesAssistantService: SalesAssistantService | null = null;
+  private readonly diagnosticModeEnabled = env.WHATSAPP_INBOUND_DIAGNOSTIC_MODE;
 
   setSalesAssistantService(service: SalesAssistantService): void {
     this.salesAssistantService = service;
@@ -23,16 +42,78 @@ export class MessageIngestionService {
   attachSessionListeners(input: AttachSessionInput): void {
     const { socket, workspaceId, sessionId } = input;
 
+    logger.info(
+      { workspaceId, sessionId, eventSource: "messages.upsert" },
+      "WhatsApp inbound listener registered"
+    );
+
     socket.ev.on("messages.upsert", (event) => {
-      if (event.type !== "notify") {
+      logger.info(
+        {
+          workspaceId,
+          sessionId,
+          eventSource: "messages.upsert",
+          upsertType: event.type,
+          messageCount: event.messages.length
+        },
+        "inbound event received"
+      );
+
+      if (this.diagnosticModeEnabled) {
+        logger.info(
+          {
+            workspaceId,
+            sessionId,
+            diagnosticMode: true,
+            eventSource: "messages.upsert",
+            eventShape: this.sanitizeUpsertEvent(event.type, event.messages)
+          },
+          "WhatsApp inbound diagnostic event"
+        );
+      }
+
+      if (!SUPPORTED_UPSERT_TYPES.has(event.type)) {
+        logger.info(
+          {
+            workspaceId,
+            sessionId,
+            eventSource: "messages.upsert",
+            reason: "unsupported_upsert_type",
+            upsertType: event.type
+          },
+          "inbound message ignored (and why)"
+        );
+        return;
+      }
+
+      if (event.messages.length === 0) {
+        logger.info(
+          {
+            workspaceId,
+            sessionId,
+            eventSource: "messages.upsert",
+            reason: "empty_event_messages"
+          },
+          "inbound message ignored (and why)"
+        );
         return;
       }
 
       for (const message of event.messages) {
         if (message.key?.fromMe) {
+          logger.info(
+            {
+              workspaceId,
+              sessionId,
+              providerMessageId: message.key?.id ?? null,
+              reason: "self_message"
+            },
+            "inbound message ignored (and why)"
+          );
           void this.handleAgentOutgoingMessage(workspaceId, sessionId, message);
           continue;
         }
+
         void this.ingestIncomingMessage(workspaceId, sessionId, message);
       }
     });
@@ -44,7 +125,16 @@ export class MessageIngestionService {
     message: WAMessage
   ): Promise<void> {
     const normalized = this.normalizeIncomingMessage(sessionId, message);
-    if (!normalized) {
+    if (!normalized.payload) {
+      logger.info(
+        {
+          workspaceId,
+          sessionId,
+          reason: normalized.reason,
+          ...normalized.details
+        },
+        "inbound message ignored (and why)"
+      );
       return;
     }
 
@@ -52,20 +142,22 @@ export class MessageIngestionService {
       {
         workspaceId,
         sessionId,
-        providerMessageId: normalized.providerMessageId
+        providerMessageId: normalized.payload.providerMessageId,
+        contactPhone: normalized.payload.contactPhone,
+        messageType: normalized.payload.messageType
       },
-      "Incoming message received"
+      "inbound message parsed"
     );
 
-    eventBus.publish(createMessageReceivedEvent(workspaceId, normalized));
+    eventBus.publish(createMessageReceivedEvent(workspaceId, normalized.payload));
 
     if (this.salesAssistantService) {
       void this.salesAssistantService.handleIncomingMessage({
         workspaceId,
         sessionId,
-        contactPhone: normalized.contactPhone,
-        customerMessage: normalized.bodyText,
-        providerMessageId: normalized.providerMessageId
+        contactPhone: normalized.payload.contactPhone,
+        customerMessage: normalized.payload.bodyText,
+        providerMessageId: normalized.payload.providerMessageId
       });
     }
   }
@@ -73,13 +165,62 @@ export class MessageIngestionService {
   private normalizeIncomingMessage(
     sessionId: string,
     message: WAMessage
-  ): MessageReceivedPayload | null {
+  ): NormalizedIncomingMessage {
     const remoteJid = message.key?.remoteJid ?? "";
+    if (!remoteJid) {
+      return {
+        payload: null,
+        reason: "missing_remote_jid",
+        details: {
+          providerMessageId: message.key?.id ?? null
+        }
+      };
+    }
+
+    if (remoteJid.endsWith("@g.us")) {
+      return {
+        payload: null,
+        reason: "group_message",
+        details: {
+          remoteJid,
+          providerMessageId: message.key?.id ?? null
+        }
+      };
+    }
+
+    if (remoteJid.endsWith("@broadcast")) {
+      return {
+        payload: null,
+        reason: "broadcast_message",
+        details: {
+          remoteJid,
+          providerMessageId: message.key?.id ?? null
+        }
+      };
+    }
+
     const contactPhone = this.normalizePhoneFromJid(remoteJid);
+    if (!contactPhone) {
+      return {
+        payload: null,
+        reason: "invalid_contact_phone",
+        details: {
+          remoteJid,
+          providerMessageId: message.key?.id ?? null
+        }
+      };
+    }
 
     const providerMessageId = message.key?.id ?? "";
-    if (!providerMessageId || !contactPhone) {
-      return null;
+    if (!providerMessageId) {
+      return {
+        payload: null,
+        reason: "missing_provider_message_id",
+        details: {
+          remoteJid,
+          contactPhone
+        }
+      };
     }
 
     const { bodyText, messageType } = this.extractMessageData(message.message);
@@ -98,15 +239,19 @@ export class MessageIngestionService {
     };
 
     return {
-      sessionId,
-      providerMessageId,
-      contactPhone,
-      contactName: message.pushName ?? null,
-      bodyText,
-      messageType,
-      direction: "inbound",
-      occurredAt,
-      rawPayload
+      payload: {
+        sessionId,
+        providerMessageId,
+        contactPhone,
+        contactName: message.pushName ?? null,
+        bodyText,
+        messageType,
+        direction: "inbound",
+        occurredAt,
+        rawPayload
+      },
+      reason: null,
+      details: {}
     };
   }
 
@@ -154,13 +299,36 @@ export class MessageIngestionService {
       imageMessage?: { caption?: string | null } | null;
       videoMessage?: { caption?: string | null } | null;
       documentMessage?: { caption?: string | null } | null;
+      buttonsResponseMessage?: { selectedDisplayText?: string | null } | null;
+      templateButtonReplyMessage?: { selectedDisplayText?: string | null } | null;
+      listResponseMessage?:
+        | {
+            title?: string | null;
+            description?: string | null;
+            singleSelectReply?: { selectedRowId?: string | null } | null;
+          }
+        | null;
+      interactiveResponseMessage?:
+        | {
+            body?: { text?: string | null } | null;
+            nativeFlowResponseMessage?: { paramsJson?: string | null } | null;
+          }
+        | null;
     };
+
     const bodyText =
       messageData.conversation ??
       messageData.extendedTextMessage?.text ??
       messageData.imageMessage?.caption ??
       messageData.videoMessage?.caption ??
       messageData.documentMessage?.caption ??
+      messageData.buttonsResponseMessage?.selectedDisplayText ??
+      messageData.templateButtonReplyMessage?.selectedDisplayText ??
+      messageData.listResponseMessage?.title ??
+      messageData.listResponseMessage?.description ??
+      messageData.listResponseMessage?.singleSelectReply?.selectedRowId ??
+      messageData.interactiveResponseMessage?.body?.text ??
+      messageData.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson ??
       null;
 
     return {
@@ -213,11 +381,41 @@ export class MessageIngestionService {
   }
 
   private normalizePhoneFromJid(remoteJid: string): string | null {
-    if (!remoteJid.endsWith("@s.whatsapp.net")) {
-      return null;
-    }
-
     const rawPhone = remoteJid.split("@")[0] ?? "";
     return this.normalizePhone(rawPhone);
+  }
+
+  private sanitizeUpsertEvent(
+    upsertType: string,
+    messages: WAMessage[]
+  ): Record<string, unknown> {
+    return {
+      type: upsertType,
+      messageCount: messages.length,
+      messages: messages.slice(0, 10).map((message) => {
+        const extracted = this.extractMessageData(message.message);
+        return {
+          id: message.key?.id ?? null,
+          remoteJid: message.key?.remoteJid ?? null,
+          participant: message.key?.participant ?? null,
+          fromMe: message.key?.fromMe ?? false,
+          messageType: extracted.messageType,
+          hasBodyText: Boolean(extracted.bodyText?.trim()),
+          bodyPreview: this.truncateForLogs(extracted.bodyText),
+          messageTimestamp: this.resolveTimestampSeconds(message.messageTimestamp)
+        };
+      })
+    };
+  }
+
+  private truncateForLogs(value: string | null | undefined): string | null {
+    const text = value?.trim();
+    if (!text) {
+      return null;
+    }
+    if (text.length <= 160) {
+      return text;
+    }
+    return `${text.slice(0, 160)}...`;
   }
 }

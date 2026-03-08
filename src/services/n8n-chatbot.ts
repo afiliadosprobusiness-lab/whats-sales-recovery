@@ -1,4 +1,5 @@
 import { AutomationSettingsService } from "../modules/automation-settings/automation-settings.service";
+import { logger } from "../utils/logger";
 
 const WEBHOOK_REQUEST_TIMEOUT_MS = 8000;
 
@@ -21,26 +22,35 @@ export class N8nChatbotService {
     payload: N8nChatbotInboundPayload
   ): Promise<void> {
     try {
-      console.log("Inbound message detected for AI router forwarding", {
-        workspaceId: payload.workspace_id,
-        phone: payload.phone,
-        conversationId: payload.conversation_id
-      });
-
       const settings =
         await this.automationSettingsService.getWorkspaceAiChatbotSettings(
           payload.workspace_id
         );
-      const webhookUrl = settings.aiRouterWebhookUrl?.trim() ?? "";
-      if (!webhookUrl) {
+
+      if (settings.workspaceId !== payload.workspace_id) {
+        logger.error(
+          {
+            requestedWorkspaceId: payload.workspace_id,
+            resolvedWorkspaceId: settings.workspaceId,
+            conversationId: payload.conversation_id
+          },
+          "inbound message ignored (and why)"
+        );
         return;
       }
 
-      console.log("AI router webhook found", {
-        workspaceId: payload.workspace_id,
-        conversationId: payload.conversation_id,
-        webhookUrl
-      });
+      const webhookUrl = settings.aiRouterWebhookUrl?.trim() ?? "";
+      if (!webhookUrl) {
+        logger.info(
+          {
+            workspaceId: payload.workspace_id,
+            conversationId: payload.conversation_id,
+            reason: "missing_ai_router_webhook_url"
+          },
+          "inbound message ignored (and why)"
+        );
+        return;
+      }
 
       const abortController = new AbortController();
       const timeout = setTimeout(() => {
@@ -48,10 +58,14 @@ export class N8nChatbotService {
       }, WEBHOOK_REQUEST_TIMEOUT_MS);
 
       try {
-        console.log("AI router forwarding started", {
-          workspaceId: payload.workspace_id,
-          conversationId: payload.conversation_id
-        });
+        logger.info(
+          {
+            workspaceId: payload.workspace_id,
+            conversationId: payload.conversation_id,
+            webhookTarget: this.toSafeWebhookTarget(webhookUrl)
+          },
+          "forwarding to AI router started"
+        );
 
         const response = await fetch(webhookUrl, {
           method: "POST",
@@ -63,27 +77,46 @@ export class N8nChatbotService {
         });
 
         if (!response.ok) {
-          console.error("AI chatbot webhook responded with non-success status", {
-            workspaceId: payload.workspace_id,
-            conversationId: payload.conversation_id,
-            statusCode: response.status
-          });
+          logger.error(
+            {
+              workspaceId: payload.workspace_id,
+              conversationId: payload.conversation_id,
+              statusCode: response.status,
+              webhookTarget: this.toSafeWebhookTarget(webhookUrl)
+            },
+            "forwarding to AI router failed"
+          );
           return;
         }
 
-        console.log("AI router forwarding success", {
-          workspaceId: payload.workspace_id,
-          conversationId: payload.conversation_id
-        });
+        logger.info(
+          {
+            workspaceId: payload.workspace_id,
+            conversationId: payload.conversation_id
+          },
+          "forwarding to AI router success"
+        );
       } finally {
         clearTimeout(timeout);
       }
     } catch (error) {
-      console.error("AI router forwarding failure", {
-        error,
-        workspaceId: payload.workspace_id,
-        conversationId: payload.conversation_id
-      });
+      logger.error(
+        {
+          error,
+          workspaceId: payload.workspace_id,
+          conversationId: payload.conversation_id
+        },
+        "forwarding to AI router failed"
+      );
+    }
+  }
+
+  private toSafeWebhookTarget(webhookUrl: string): string {
+    try {
+      const parsed = new URL(webhookUrl);
+      return `${parsed.origin}${parsed.pathname}`;
+    } catch {
+      return "invalid_webhook_url";
     }
   }
 }

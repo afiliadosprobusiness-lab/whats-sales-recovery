@@ -57,19 +57,20 @@ Backend modular monolith (Node.js + TypeScript) using Baileys (`@whiskeysockets/
 - Dashboard app includes local settings proxy handlers:
   - `GET /api/settings/ai-chatbot`
   - `POST /api/settings/ai-chatbot`
-- AI chatbot settings are stored directly in dashboard local storage (`workspace-settings.json`) using a serverless-safe writable path (env override: `WORKSPACE_SETTINGS_FILE_PATH`, fallback `/tmp/recuperaventas-dashboard/workspace-settings.json` in production).
+- Dashboard AI chatbot settings are persisted through backend settings endpoints (`/api/v1/settings/ai-chatbot` and compatibility alias `/api/settings/ai-chatbot`) into `automation_settings.ai_router_webhook_url`.
 - Dashboard auth uses signed JWT in `httpOnly` cookie (`rv_auth_token`).
 - Dashboard user credentials are persisted for MVP in JSON auth storage (`apps/dashboard/.data/users.json` in local dev, `/tmp/recuperaventas-dashboard/users.json` by default in production serverless) with bcrypt hashes.
 - PostgreSQL for domain data.
 - BullMQ/Redis scaffolded for later async jobs.
 - In-process event bus for module communication.
 - Backend CORS allowlist enabled for Vercel dashboard/landing and local development origin.
-- Baileys session startup uses per-workspace auth folders under `sessions/{workspace_id}`.
+- Baileys session startup uses per-workspace auth folders under `${WHATSAPP_SESSION_DATA_PATH}/{workspace_id}` with legacy `sessions/{workspace_id}` fallback.
 - Baileys startup resolves and uses the latest WhatsApp Web protocol version (`fetchLatestBaileysVersion`) plus explicit browser metadata.
 - WhatsApp socket instances are keyed by workspace and reused across repeated start requests (one socket per workspace).
 - No Chromium/Puppeteer dependency in runtime.
 - WhatsApp session reconnects automatically after `connection.update.close` unless reason is `DisconnectReason.loggedOut`.
-- WhatsApp session lifecycle logs `authenticated`, QR generation, `connected`, `disconnected`, last disconnect reason/status code, and incoming messages for diagnostics.
+- Startup restoration uses reconnectable DB sessions (`whatsapp_sessions.status` = `connected|pending_qr`) so listeners are reattached after process restart.
+- WhatsApp session lifecycle logs include explicit stages (`initialized`, `connected`, `disconnected`) plus `authenticated`, QR generation, disconnect reason/status code, and inbound diagnostics.
 - Campaign worker sends one scheduled campaign message at a time and waits 5-10 seconds before the next send.
 - Sales assistant executes in-process on `message_received` pipeline and can use OpenAI API with fallback templates.
 - Sales assistant API surface includes settings management and dashboard counters by workspace.

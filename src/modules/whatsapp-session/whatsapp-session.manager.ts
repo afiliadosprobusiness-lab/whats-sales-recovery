@@ -8,6 +8,7 @@ import makeWASocket, {
 import fs from "fs";
 import path from "path";
 import pino from "pino";
+import { env } from "../../config/env";
 import { logger } from "../../utils/logger";
 import { MessageIngestionService } from "../message-ingestion/message-ingestion.service";
 import {
@@ -30,23 +31,32 @@ export class WhatsAppSessionManager {
   ) {}
 
   async restoreSessions(): Promise<void> {
-    const sessionsPath = this.resolveSessionsRootPath();
-    if (!fs.existsSync(sessionsPath)) {
-      logger.info({ sessionsPath }, "No WhatsApp sessions found to restore");
+    const sessionsRootPath = this.resolveSessionsRootPath();
+    const reconnectableSessions = await this.repository.listForReconnect();
+    if (reconnectableSessions.length === 0) {
+      logger.info(
+        { sessionsRootPath },
+        "No WhatsApp sessions found to restore"
+      );
       return;
     }
 
-    const workspaceIds = fs
-      .readdirSync(sessionsPath, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name);
-
-    for (const workspaceId of workspaceIds) {
-      logger.info({ workspaceId }, "Restoring WhatsApp session for workspace");
+    for (const session of reconnectableSessions) {
+      logger.info(
+        {
+          workspaceId: session.workspaceId,
+          sessionId: session.id,
+          status: session.status
+        },
+        "Restoring WhatsApp session for workspace"
+      );
       try {
-        await this.startSession(workspaceId, { isStartupRestore: true });
+        await this.startSession(session.workspaceId, { isStartupRestore: true });
       } catch (error) {
-        logger.error({ workspaceId, error }, "Failed restoring WhatsApp session");
+        logger.error(
+          { workspaceId: session.workspaceId, sessionId: session.id, error },
+          "Failed restoring WhatsApp session"
+        );
       }
     }
   }
@@ -65,6 +75,10 @@ export class WhatsAppSessionManager {
     const session = existing ?? (await this.repository.create(workspaceId));
 
     if (this.sessionsByWorkspaceId.has(session.workspaceId)) {
+      logger.info(
+        { workspaceId: session.workspaceId, sessionId: session.id },
+        "WhatsApp session initialized"
+      );
       const latest = await this.repository.findById(session.id);
       if (!latest) {
         throw new Error("Session was not found after startup");
@@ -120,7 +134,21 @@ export class WhatsAppSessionManager {
 
   async isWorkspaceConnected(workspaceId: string): Promise<boolean> {
     const session = await this.repository.findByWorkspaceId(workspaceId);
-    return session?.status === "connected";
+    if (!session || session.status !== "connected") {
+      return false;
+    }
+
+    const hasSocket = this.sessionsByWorkspaceId.has(workspaceId);
+    if (!hasSocket) {
+      logger.warn(
+        { workspaceId, sessionId: session.id },
+        "Session marked connected but no active socket found in memory"
+      );
+      void this.reconnectSession(workspaceId);
+      return false;
+    }
+
+    return true;
   }
 
   async sendMessage(input: {
@@ -164,7 +192,6 @@ export class WhatsAppSessionManager {
     const sessionDataPath = this.resolveSessionDataPath(session.workspaceId);
     const { state, saveCreds } = await useMultiFileAuthState(sessionDataPath);
     const { version, isLatest } = await fetchLatestBaileysVersion();
-    console.log("Using WA version:", version, "isLatest:", isLatest);
     logger.info(
       { workspaceId: session.workspaceId, sessionId: session.id, version, isLatest },
       "Resolved Baileys WhatsApp Web version"
@@ -186,7 +213,7 @@ export class WhatsAppSessionManager {
         sessionId: session.id,
         sessionDataPath
       },
-      "Initializing WhatsApp session socket"
+      "WhatsApp session initialized"
     );
 
     this.attachSessionLifecycle({
@@ -218,7 +245,6 @@ export class WhatsAppSessionManager {
     socket.ev.on("creds.update", () => {
       if (!authenticatedLogged) {
         authenticatedLogged = true;
-        console.log("WhatsApp session authenticated");
         logger.info({ workspaceId, sessionId }, "WhatsApp authenticated");
       }
     });
@@ -228,7 +254,6 @@ export class WhatsAppSessionManager {
 
       if (qr) {
         void this.repository.setQr(sessionId, qr);
-        console.log("WhatsApp QR generated");
         logger.info(
           { workspaceId, sessionId, qrLength: qr.length },
           "WhatsApp QR generated"
@@ -237,15 +262,12 @@ export class WhatsAppSessionManager {
 
       if (connection === "open") {
         if (isStartupRestore) {
-          console.log("WhatsApp session restored successfully");
           logger.info(
             { workspaceId, sessionId },
             "WhatsApp session restored successfully"
           );
-        } else {
-          console.log("WhatsApp connected");
-          logger.info({ workspaceId, sessionId }, "WhatsApp connected");
         }
+        logger.info({ workspaceId, sessionId }, "WhatsApp session connected");
         void this.repository.setStatus(sessionId, "connected");
         void this.repository.touchLastSeen(sessionId);
         return;
@@ -260,15 +282,12 @@ export class WhatsAppSessionManager {
 
       if (this.manualDisconnectWorkspaces.has(workspaceId)) {
         this.manualDisconnectWorkspaces.delete(workspaceId);
-        console.log("WhatsApp disconnected");
-        logger.info({ workspaceId, sessionId }, "WhatsApp disconnected");
+        logger.info({ workspaceId, sessionId }, "WhatsApp session disconnected");
         return;
       }
 
       const statusCode = this.extractDisconnectStatusCode(lastDisconnect);
       const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-      console.log("Connection closed:", lastDisconnect?.error);
-
       logger.warn(
         {
           workspaceId,
@@ -277,11 +296,10 @@ export class WhatsAppSessionManager {
           statusCode,
           shouldReconnect
         },
-        "WhatsApp disconnected"
+        "WhatsApp session disconnected"
       );
 
       if (shouldReconnect) {
-        console.log("Reconnecting WhatsApp session...");
         void this.reconnectSession(workspaceId);
       }
     });
@@ -324,14 +342,30 @@ export class WhatsAppSessionManager {
   }
 
   private resolveSessionDataPath(workspaceId: string): string {
-    const relativePath = `sessions/${workspaceId}`;
-    const absolutePath = path.resolve(relativePath);
-    fs.mkdirSync(absolutePath, { recursive: true });
-    return relativePath;
+    const sessionsRootPath = this.resolveSessionsRootPath();
+    const preferredPath = path.join(sessionsRootPath, workspaceId);
+    const legacyPath = path.resolve("sessions", workspaceId);
+
+    if (!fs.existsSync(preferredPath) && fs.existsSync(legacyPath)) {
+      logger.warn(
+        { workspaceId, legacyPath, preferredPath },
+        "Using legacy WhatsApp session path"
+      );
+      fs.mkdirSync(legacyPath, { recursive: true });
+      return legacyPath;
+    }
+
+    fs.mkdirSync(preferredPath, { recursive: true });
+    return preferredPath;
   }
 
   private resolveSessionsRootPath(): string {
-    return path.resolve("sessions");
+    const configuredRoot = env.WHATSAPP_SESSION_DATA_PATH.trim();
+    const absoluteRoot = path.isAbsolute(configuredRoot)
+      ? configuredRoot
+      : path.resolve(configuredRoot);
+    fs.mkdirSync(absoluteRoot, { recursive: true });
+    return absoluteRoot;
   }
 
   private extractDisconnectReason(
